@@ -59,3 +59,24 @@ public protocol NewsProviding: Sendable {
 public protocol AIProviding: Sendable {
     func complete(prompt: String, context: PersonalDataSnapshot) async throws -> String
 }
+
+public protocol LocationProviding: Sendable {
+    func requestWhenInUseAuthorization() async -> PermissionState
+    func currentLocation() async throws -> UserLocation
+    func manualLocation(address: String) async throws -> UserLocation
+}
+
+public protocol PlacesProviding: Sendable {
+    func search(category: PlaceCategory, near location: UserLocation, query: String?) async throws -> [PlaceResult]
+    func favoritePlace(_ category: PlaceCategory) async throws -> PlaceResult?
+}
+
+public protocol FuelPriceProviding: Sendable {
+    func enrichFuelPrices(_ places: [PlaceResult]) async throws -> [PlaceResult]
+    func cheapestFuelStation(near location: UserLocation) async throws -> NavigationRecommendation
+}
+
+public protocol NavigationProviding: Sendable {
+    func routeURL(destination: PlaceResult, mode: NavigationMode, preference: NavigationAppPreference) async -> URL
+    func openNavigation(destination: PlaceResult, mode: NavigationMode, preference: NavigationAppPreference) async -> URL
+}

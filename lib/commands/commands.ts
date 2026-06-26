@@ -9,6 +9,10 @@ export type Intent =
   | 'summarize_tasks'
   | 'open_module'
   | 'summarize_news'
+  | 'get_weather'
+  | 'find_place'
+  | 'search_wiki'
+  | 'start_focus'
   | 'explain_permissions'
   | 'request_permission'
   | 'show_system_status'
@@ -43,6 +47,8 @@ const moduleAliases: Record<string, ModuleId> = {
   assistant: 'assistant',
   aura: 'assistant',
   ki: 'assistant',
+  heute: 'today',
+  today: 'today',
   dashboard: 'dashboard',
   home: 'dashboard',
   kalender: 'calendar',
@@ -52,6 +58,18 @@ const moduleAliases: Record<string, ModuleId> = {
   tasks: 'tasks',
   todos: 'tasks',
   news: 'news',
+  wissen: 'wiki',
+  wiki: 'wiki',
+  wikipedia: 'wiki',
+  notizen: 'notes',
+  notes: 'notes',
+  fokus: 'focus',
+  focus: 'focus',
+  nachrichten: 'news',
+  navigation: 'navigation',
+  route: 'navigation',
+  karten: 'navigation',
+  maps: 'navigation',
   nachrichten: 'news',
   berechtigungen: 'permissions',
   rechte: 'permissions',
@@ -81,6 +99,18 @@ export function detectIntent(input: string): Intent {
 
   if (/(aufgaben|todo|tagesplan|machen)/.test(text) && /(fass|zusammen|zeige|was muss|status)/.test(text)) {
     return 'summarize_tasks';
+  }
+
+  if (/(news|nachrichten|meldungen|deutschland|formel|f1|passiert)/.test(text) && /(fass|zusammen|wichtig|aktuell|briefing|zeige|was|heute)/.test(text)) {
+    return 'summarize_news';
+  }
+
+  if (/wetter/.test(text)) return 'get_weather';
+  if (/(wiki|wikipedia|wissen|suche nach)/.test(text)) return 'search_wiki';
+  if (/(fokus|konzentrier|pomodoro)/.test(text)) return 'start_focus';
+
+  if (/(navigiere|route|finde|suche|bring).*(tankstelle|apotheke|supermarkt|parkplatz|werkstatt|mcdonald|kleidung|geldautomat|bankautomat|paketstation|ladestation|krankenhaus|notfall)/.test(text)) {
+    return 'find_place';
   }
 
   if (/(news|nachrichten|meldungen)/.test(text) && /(fass|zusammen|wichtig|aktuell|briefing|zeige)/.test(text)) {
@@ -182,6 +212,22 @@ export function executeCommand(parsed: ParsedCommand, context: CommandContext): 
     case 'summarize_news':
       context.open('news');
       return summarizeNews(demoNews);
+
+    case 'get_weather':
+      context.open('dashboard');
+      return 'Wetter-Karte geöffnet. Live-Wetter nutzt /api/weather mit WEATHER_API_KEY und Standortfreigabe; sonst Fallback.';
+
+    case 'find_place':
+      context.open('navigation');
+      return 'Navigation geöffnet. Standort wird nur nach Klick abgefragt; ohne Freigabe nutze ich lokale Fallback-Orte und echte Maps-Links.';
+
+    case 'search_wiki':
+      context.open('wiki');
+      return 'Wissenssuche geöffnet. Wikipedia/Wikimedia ist kostenlos und wird über eine Server-Route abgefragt.';
+
+    case 'start_focus':
+      context.open('focus');
+      return 'Fokusmodus geöffnet. Timer und Motivation laufen lokal und kostenlos.';
 
     case 'explain_permissions': {
       const missing = context.permissions.filter((permission) => permission.recommended && permission.status !== 'granted');

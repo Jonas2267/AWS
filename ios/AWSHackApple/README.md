@@ -52,6 +52,8 @@ Der CLI-Build validiert die Core-Logik auf Linux/macOS ohne iOS-Simulator.
 
 - SwiftUI für UI
 - MVVM über `AWSHackViewModel`
+- SwiftData-Persistenzmodelle für Aufgaben und Favoritenorte
+- KeychainCredentialStore für lokalen Account auf Apple-Plattformen
 - EventKit für Kalender und Erinnerungen
 - UserNotifications für lokale Hinweise und Test-Benachrichtigungen
 - WeatherKit/CoreLocation vorbereitet über Provider-Protokolle
@@ -65,6 +67,7 @@ Der CLI-Build validiert die Core-Logik auf Linux/macOS ohne iOS-Simulator.
 ## Was echt funktioniert
 
 - Swift Package baut mit `swift build`.
+- KeychainCredentialStore ist für Accountdaten vorbereitet; Linux/CLI nutzt sicheren JSON-/Demo-Fallback.
 - Core-Logik für Daily Briefing, Intent Parsing, Entity Extraction und Command Execution.
 - Demo-Provider für Kalender, Erinnerungen, Aufgaben, Alarme, Wetter, Health-Hinweis, Kontakte, Dateien, News und lokale AI.
 - SwiftUI iPhone UI mit Bootscreen, Konto, Setup-Wizard, AURA Chat, Dashboard, Permission Center, Data Hub und Bottom Navigation.
@@ -108,3 +111,46 @@ Weitere Intents für Termin, Erinnerung, Wecker, Wetter und Dashboard können au
 - Ablehnung führt zu Demo-Modus oder In-App-Fallback.
 - Health-Daten werden nicht medizinisch diagnostiziert.
 - Dateien werden nur nach aktiver Auswahl gelesen.
+- Document Picker Zusammenfassung ist in der SwiftUI Data-Hub Ansicht vorbereitet.
+
+## Navigation & Alltagssuche
+
+AURA Core versteht zusätzlich Navigationsbefehle wie:
+
+- „Navigiere mich zur nächsten Tankstelle“
+- „Finde die billigste Tankstelle in der Nähe“
+- „Bring mich zum nächsten Supermarkt“
+- „Finde eine Apotheke, die offen hat“
+- „Wo ist der nächste Parkplatz?“
+- „Navigiere mich nach Hause“
+- „Suche einen McDonald’s in der Nähe“
+- „Finde einen Geldautomaten“
+- „Route starten“
+
+Die Architektur nutzt:
+
+- `LocationProviding` für CoreLocation oder manuellen Demo-Standort
+- `PlacesProviding` für MapKit/Google Places/Demo-Orte
+- `FuelPriceProviding` für echte Tankstellenpreis-APIs oder Demo-Preise
+- `NavigationProviding` für Apple Karten, Google Maps und Kartenlinks
+
+Demo-Orte enthalten Entfernung, Öffnungszeiten, Bewertung, Fahrzeit und simulierte Kraftstoffpreise. Die billigste-Tankstelle-Logik vergleicht Preis und Entfernung und empfiehlt die sinnvollste Option. Standort wird nur bei Nutzung angefragt; ohne Freigabe funktioniert die Suche mit Demo-Orten oder manueller Adresse.
+
+## Navigation App Intents
+
+Vorbereitet sind zusätzlich:
+
+- Nächste Tankstelle finden
+- Billigste Tankstelle finden
+- Navigation nach Hause
+- Navigation zur Arbeit/Schule
+- Nächsten Supermarkt finden
+- Apotheke suchen
+- AURA Route starten
+
+## Navigation Datenschutz
+
+- Keine heimliche Standortüberwachung.
+- Kein Hintergrund-Tracking ohne separate, klare iOS-Freigabe.
+- Favoriten wie Zuhause, Schule und Arbeit bleiben lokal.
+- Externe Places-/Fuel-APIs müssen sichtbar aktiviert werden und dürfen keine sensiblen Daten ohne Zustimmung erhalten.

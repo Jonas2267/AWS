@@ -35,6 +35,7 @@ public extension PermissionDescriptor {
         .init(id: .notifications, recommended: true, capability: "UserNotifications plant lokale Hinweise und Test-Benachrichtigungen.", fallback: "In-App-Hinweise."),
         .init(id: .appAlarms, recommended: true, capability: "AlarmKit/App-eigene Alarme, falls verfügbar.", fallback: "Lokale Notifications als AWS-Hack-Wecker."),
         .init(id: .location, recommended: false, capability: "CoreLocation bestimmt Wetter-Ort nach Freigabe.", fallback: "Manueller Demo-Ort."),
+        .init(id: .navigation, recommended: true, capability: "CoreLocation und MapKit suchen nahe Orte nur bei Nutzung und starten Routen in Karten-Apps.", fallback: "Manueller Startort und lokale Demo-Orte."),
         .init(id: .weather, recommended: true, capability: "WeatherKit lädt Wetter nach Berechtigung/Entitlement.", fallback: "Demo-Wetter."),
         .init(id: .health, recommended: false, capability: "HealthKit liest freigegebene Schlaf-/Aktivitätsdaten.", fallback: "Keine Health-Daten oder Demo-Hinweis."),
         .init(id: .contacts, recommended: false, capability: "Contacts sucht Kontakte nach Freigabe.", fallback: "Keine Kontaktübertragung; manuelle Eingabe."),

@@ -1,3 +1,105 @@
+# AWS KI Manager — Artificial Workstation System
+
+AWS KI Manager ist ein kostenloses, persönliches Personal-KI-OS für Alltag, Arbeit, Schule, News, Wetter, Navigation, Aufgaben, Kalender, Dateien, Wissen, Sprache und Browser-Berechtigungen. Die App kombiniert ein hochwertiges Liquid-Glass-Interface mit AURA Core, einem lokalen KI-Assistenten, der ohne kostenpflichtige Pflicht-APIs sinnvoll funktioniert.
+
+## Kostenloser Modus
+
+Die App ist so gebaut, dass sie ohne API-Key startet:
+
+- Wetter: Open-Meteo, kostenlos und ohne API-Key.
+- Geocoding: Open-Meteo Geocoding für Stadt -> Koordinaten.
+- News: öffentliche RSS-Feeds über Next.js Server-Proxy; optional NewsAPI-Key als Zusatz.
+- Wissen: Wikipedia/Wikimedia API, kostenlos und ohne Key.
+- Orte: OpenStreetMap/Nominatim über Server-Route oder lokaler Fallback.
+- Navigation: kostenlose Links zu Google Maps, Apple Karten und OpenStreetMap.
+- KI: lokaler AURA-Modus; OpenAI ist optional und wird nur serverseitig über `.env.local` verwendet.
+- Aufgaben, Termine, Erinnerungen, Notizen und Fokusmodus: lokal im Browser.
+
+## Sicherheit und Datenschutz
+
+- Keine Malware, keine Exploits, keine heimliche Überwachung und keine gefährlichen Terminal-Funktionen.
+- Keine API-Keys im Frontend; optionale Schlüssel bleiben in `.env.local` oder Deployment-Secrets.
+- Standort, Mikrofon, Notifications, Dateien, Speech und Clipboard werden nur nach aktivem Nutzerklick vorbereitet oder abgefragt.
+- Keine fremden App-Daten ohne offizielle Schnittstelle.
+- Wenn Live-Daten nicht verfügbar sind, zeigt die App kleine professionelle Status-Badges wie `Live kostenlos`, `Lokal`, `Fallback`, `API optional`, `Freigabe fehlt` oder `Offline`.
+
+## Lokal starten
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Produktionsbuild:
+
+```bash
+npm run build
+npm run start
+```
+
+## Optionale `.env.local`
+
+```env
+NEWS_API_KEY=
+OPENAI_API_KEY=
+OPTIONAL_GOOGLE_MAPS_API_KEY=
+```
+
+Open-Meteo, Wikipedia, OpenStreetMap/Nominatim und Maps-Links benötigen keinen Key.
+
+## Hauptfunktionen
+
+- Premium Login/Onboarding mit lokalem Account, Passwort-Hash und wiederkehrendem AURA-Start.
+- Ansicht **Heute** mit Tagesbriefing, Wetter, Aufgaben, Terminen, Erinnerungen und Schnellzugriffen.
+- AURA Core Chat für Befehle wie „Wie sieht mein Tag aus?“, „Was ist heute in Deutschland passiert?“, „Wie ist das Wetter?“, „Finde eine Apotheke“, „Suche Wikipedia nach …“ oder „Öffne Fokusmodus“.
+- News-Modul mit kostenloser RSS-Strategie, Kategorien, Suche und optionalem NewsAPI-Fallback.
+- Wetter-Modul mit Open-Meteo, Temperatur, Tageshoch/-tief, Regenwahrscheinlichkeit, Wind und Wettercode-Text.
+- Navigation/Places mit Browser-Standort, OSM/Nominatim, Fallback-Orten, Tankstellen ohne behauptete Echtpreise und kostenlosen Kartenlinks.
+- Wikipedia-Modul mit Kurz-Zusammenfassung und Quelle.
+- Lokale Notizen mit Suche-/Zusammenfassungsgrundlage für AURA.
+- Fokusmodus mit lokalem Timer, Aufgabenbezug und Motivation.
+- Permission Center mit echten Browser-APIs für Notifications, Geolocation, Mikrofon, Speech-Erkennung und Datei-Auswahl.
+- Dateien-Modul: liest Textdateien nur nach aktivem File-Picker-Klick.
+- Command Palette wie Spotlight über `Ctrl+K` / `Cmd+K`.
+
+## Browser-Berechtigungen
+
+| Bereich | Browser-API | Verhalten |
+| --- | --- | --- |
+| Notifications | `Notification.requestPermission()` | Test-Notification, Reminder-Fallback in der App |
+| Standort | `navigator.geolocation.getCurrentPosition()` | Nur einmalig nach Klick, keine Dauerüberwachung |
+| Mikrofon | `navigator.mediaDevices.getUserMedia({ audio: true })` | Nur nach Klick, sichtbarer Aktivstatus, Stop-Button |
+| Sprache | Web Speech API | Nur vorbereitet/aktiv wenn unterstützt und vom Nutzer gestartet |
+| Dateien | `<input type="file">` | Lokales Lesen ausgewählter Textdateien |
+| Clipboard | spätere explizite Klick-Aktion | Keine heimliche Zwischenablage |
+
+## Native iOS später
+
+Die Web-PWA kann viel im Browser, aber iOS-native Funktionen wie EventKit, WeatherKit, HealthKit, Contacts, App Intents, Siri/Shortcuts, Keychain, native Document Picker und Background-Tasks gehören in die vorbereitete SwiftUI-Struktur unter `ios/AWSHackApple`. Der Ordnername bleibt technisch bestehen; Produktname und UI sind AWS KI Manager.
+
+## Grenzen
+
+- Apple-Clock-Wecker, iMessage, WhatsApp, Instagram, Snapchat und andere App-Daten werden nicht heimlich ausgelesen.
+- Spritpreise werden nicht als echt behauptet, solange keine legale Quelle angebunden ist.
+- Google Maps Platform und OpenAI sind optional, nicht Voraussetzung.
+- Externe KI bekommt sensible Daten nur, wenn Nutzer das später bewusst aktiviert und die Daten minimiert gesendet werden.
+
+## Architektur
+
+- `app/page.tsx` — PWA Shell, Premium UI, AURA, Heute, Dashboard, Module, echte Browser-Permissions.
+- `app/api/weather` — Open-Meteo Wetter + Geocoding.
+- `app/api/news` — RSS-News-Proxy + optional NewsAPI.
+- `app/api/wiki` — Wikipedia/Wikimedia Kurzantworten.
+- `app/api/places` — OpenStreetMap/Nominatim-Orte + Fallback.
+- `app/api/assistant` — optional OpenAI, sonst kostenloser lokaler AURA-Modus.
+- `lib/commands`, `lib/news`, `lib/weather`, `lib/navigation`, `lib/permissions`, `lib/storage` — modulare Provider, Types und Command-System.
+
+## Checks
+
+```bash
+npm run build
+```
 # AWS Hack — Artificial Workstation System Hack
 
 AWS Hack ist ein fiktives, legales Cyber-OS im Jarvis-Stil für den eigenen PC und das eigene Handy. Die App ist **kein Hacking-Tool**: Terminal, Scan-Optik, Systemstatus und Cyber-Animationen sind Simulationen oder lokale Automatisierung nach aktiver Nutzerfreigabe.

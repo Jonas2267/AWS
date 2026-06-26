@@ -9,7 +9,7 @@ public enum PermissionState: String, Codable, Sendable, CaseIterable {
 }
 
 public enum PermissionKind: String, Codable, Sendable, CaseIterable, Identifiable {
-    case calendar, reminders, notifications, appAlarms, location, weather, health, contacts, files, microphone, speech, aiAPI
+    case calendar, reminders, notifications, appAlarms, location, navigation, weather, health, contacts, files, microphone, speech, aiAPI
     public var id: String { rawValue }
 
     public var title: String {
@@ -19,6 +19,7 @@ public enum PermissionKind: String, Codable, Sendable, CaseIterable, Identifiabl
         case .notifications: "Benachrichtigungen"
         case .appAlarms: "App-Wecker"
         case .location: "Standort"
+        case .navigation: "Standort & Navigation"
         case .weather: "Wetter"
         case .health: "HealthKit"
         case .contacts: "Kontakte"
@@ -180,4 +181,121 @@ public struct DailyBriefing: Codable, Sendable, Equatable {
     public var alarms: [AppAlarm]
     public var health: HealthSummary?
     public var recommendation: String
+}
+
+public enum PlaceCategory: String, Codable, Sendable, CaseIterable, Identifiable {
+    case fuel, supermarket, pharmacy, hospital, parking, workshop, restaurant, clothing, atm, school, work, home, parcelStation, evCharging
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .fuel: "Tankstelle"
+        case .supermarket: "Supermarkt"
+        case .pharmacy: "Apotheke"
+        case .hospital: "Krankenhaus/Notfall"
+        case .parking: "Parkplatz"
+        case .workshop: "Werkstatt"
+        case .restaurant: "Restaurant/Fast Food"
+        case .clothing: "Kleidung"
+        case .atm: "Geldautomat"
+        case .school: "Schule"
+        case .work: "Arbeit"
+        case .home: "Zuhause"
+        case .parcelStation: "Paketstation"
+        case .evCharging: "Elektro-Ladestation"
+        }
+    }
+}
+
+public enum NavigationMode: String, Codable, Sendable, CaseIterable, Identifiable {
+    case driving = "Auto"
+    case walking = "Zu Fuß"
+    case cycling = "Fahrrad"
+    case transit = "ÖPNV"
+    public var id: String { rawValue }
+}
+
+public enum NavigationAppPreference: String, Codable, Sendable, CaseIterable {
+    case automatic, appleMaps, googleMaps
+}
+
+public struct Coordinate: Codable, Sendable, Equatable {
+    public var latitude: Double
+    public var longitude: Double
+    public init(latitude: Double, longitude: Double) {
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+}
+
+public struct UserLocation: Codable, Sendable, Equatable {
+    public var coordinate: Coordinate
+    public var label: String
+    public var isDemo: Bool
+    public init(coordinate: Coordinate, label: String, isDemo: Bool) {
+        self.coordinate = coordinate
+        self.label = label
+        self.isDemo = isDemo
+    }
+}
+
+public struct PlaceResult: Identifiable, Codable, Sendable, Equatable {
+    public var id: UUID
+    public var name: String
+    public var category: PlaceCategory
+    public var address: String
+    public var coordinate: Coordinate
+    public var distanceKilometers: Double
+    public var estimatedTravelMinutes: Int
+    public var isOpen: Bool
+    public var rating: Double?
+    public var fuelPricePerLiter: Double?
+    public var isDemo: Bool
+
+    public init(id: UUID = UUID(), name: String, category: PlaceCategory, address: String, coordinate: Coordinate, distanceKilometers: Double, estimatedTravelMinutes: Int, isOpen: Bool = true, rating: Double? = nil, fuelPricePerLiter: Double? = nil, isDemo: Bool = true) {
+        self.id = id
+        self.name = name
+        self.category = category
+        self.address = address
+        self.coordinate = coordinate
+        self.distanceKilometers = distanceKilometers
+        self.estimatedTravelMinutes = estimatedTravelMinutes
+        self.isOpen = isOpen
+        self.rating = rating
+        self.fuelPricePerLiter = fuelPricePerLiter
+        self.isDemo = isDemo
+    }
+}
+
+public struct NavigationRecommendation: Codable, Sendable, Equatable {
+    public var query: String
+    public var category: PlaceCategory
+    public var recommended: PlaceResult?
+    public var alternatives: [PlaceResult]
+    public var explanation: String
+    public var usedDemoData: Bool
+
+    public init(query: String, category: PlaceCategory, recommended: PlaceResult?, alternatives: [PlaceResult], explanation: String, usedDemoData: Bool) {
+        self.query = query
+        self.category = category
+        self.recommended = recommended
+        self.alternatives = alternatives
+        self.explanation = explanation
+        self.usedDemoData = usedDemoData
+    }
+}
+
+public struct FavoritePlace: Identifiable, Codable, Sendable, Equatable {
+    public var id: UUID
+    public var category: PlaceCategory
+    public var label: String
+    public var address: String
+    public var coordinate: Coordinate
+
+    public init(id: UUID = UUID(), category: PlaceCategory, label: String, address: String, coordinate: Coordinate) {
+        self.id = id
+        self.category = category
+        self.label = label
+        self.address = address
+        self.coordinate = coordinate
+    }
 }

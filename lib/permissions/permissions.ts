@@ -36,10 +36,18 @@ const permissionCopy: Array<Omit<PermissionItem, 'status'>> = [
   },
   {
     id: 'location',
-    name: 'Standort',
-    recommended: false,
-    description: 'Optional für ortsbezogene Erinnerungen in späteren Versionen.',
-    technical: 'Nur Geolocation API nach aktiver Freigabe, kein Tracking im Hintergrund.',
+    name: 'Standort & Navigation',
+    recommended: true,
+    description: 'Optional für Wetter, Orte in der Nähe und Maps-Navigation nach aktivem Klick.',
+    technical: 'Nur Geolocation API nach aktiver Freigabe, kein Tracking im Hintergrund und keine dauerhafte Speicherung ohne Zustimmung.',
+  },
+
+  {
+    id: 'speech',
+    name: 'Spracheingabe',
+    recommended: true,
+    description: 'Prüft Web Speech API Support für spätere AURA-Diktatsteuerung.',
+    technical: 'Sprachaufnahme startet nie automatisch; Browser-Support und OS-Freigaben bleiben sichtbar.',
   },
   {
     id: 'contacts',

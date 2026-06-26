@@ -8,6 +8,7 @@ public struct PersonalDataSnapshot: Sendable, Equatable {
     public var weather: WeatherSnapshot
     public var health: HealthSummary?
     public var headlines: [String]
+    public var navigationRecommendation: NavigationRecommendation?
 }
 
 public struct PersonalDataHub: Sendable {
@@ -22,6 +23,10 @@ public struct PersonalDataHub: Sendable {
     public let files: FileProviding
     public let news: NewsProviding
     public let ai: AIProviding
+    public let location: LocationProviding
+    public let places: PlacesProviding
+    public let fuelPrices: FuelPriceProviding
+    public let navigation: NavigationProviding
 
     public init(
         calendar: CalendarDataProviding = DemoCalendarProvider(),
@@ -34,7 +39,11 @@ public struct PersonalDataHub: Sendable {
         contacts: ContactProviding = DemoContactProvider(),
         files: FileProviding = DemoFileProvider(),
         news: NewsProviding = DemoNewsProvider(),
-        ai: AIProviding = LocalAIProvider()
+        ai: AIProviding = LocalAIProvider(),
+        location: LocationProviding = DemoLocationProvider(),
+        places: PlacesProviding = DemoPlacesProvider(),
+        fuelPrices: FuelPriceProviding = DemoFuelPriceProvider(),
+        navigation: NavigationProviding = MapsNavigationProvider()
     ) {
         self.calendar = calendar
         self.reminders = reminders
@@ -47,6 +56,10 @@ public struct PersonalDataHub: Sendable {
         self.files = files
         self.news = news
         self.ai = ai
+        self.location = location
+        self.places = places
+        self.fuelPrices = fuelPrices
+        self.navigation = navigation
     }
 
     public func snapshot() async -> PersonalDataSnapshot {
@@ -65,6 +78,35 @@ public struct PersonalDataHub: Sendable {
             alarms: alarmsResult ?? [],
             weather: weatherResult ?? WeatherSnapshot(locationName: "Demo", condition: "Unbekannt", temperatureCelsius: 0, rainChance: 0, advisory: "Wetter nicht verfügbar."),
             health: healthResult ?? nil,
+            headlines: newsResult ?? [],
+            navigationRecommendation: nil
+        )
+    }
+
+
+    public func findPlaces(category: PlaceCategory, query: String? = nil) async -> NavigationRecommendation {
+        do {
+            let current = try await location.currentLocation()
+            let results = try await places.search(category: category, near: current, query: query)
+            let recommended = results.first
+            let explanation = recommended.map { place in
+                "Ich habe \(results.count) Treffer für \(category.title) gefunden. Empfehlung: \(place.name), \(String(format: "%.1f", place.distanceKilometers)) km entfernt, Fahrzeit ca. \(place.estimatedTravelMinutes) Minuten."
+            } ?? "Keine Treffer gefunden. Du kannst einen manuellen Ort eingeben."
+            return NavigationRecommendation(query: query ?? category.title, category: category, recommended: recommended, alternatives: Array(results.dropFirst()), explanation: explanation, usedDemoData: results.contains { $0.isDemo })
+        } catch {
+            return NavigationRecommendation(query: query ?? category.title, category: category, recommended: nil, alternatives: [], explanation: "Standort oder Suche nicht verfügbar. Nutze manuelle Adresse oder Demo-Modus.", usedDemoData: true)
+        }
+    }
+
+    public func cheapestFuelStation() async -> NavigationRecommendation {
+        do { return try await fuelPrices.cheapestFuelStation(near: try await location.currentLocation()) }
+        catch { return NavigationRecommendation(query: "billigste Tankstelle", category: .fuel, recommended: nil, alternatives: [], explanation: "Tankstellenvergleich nicht verfügbar. Prüfe Standortfreigabe oder nutze Demo-Daten.", usedDemoData: true) }
+    }
+
+    public func navigationURL(for destination: PlaceResult, mode: NavigationMode = .driving, preference: NavigationAppPreference = .automatic) async -> URL {
+        await navigation.openNavigation(destination: destination, mode: mode, preference: preference)
+    }
+
             headlines: newsResult ?? []
         )
     }

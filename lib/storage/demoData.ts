@@ -13,6 +13,8 @@ export const exampleCommands = [
   'Erstelle eine Aufgabe: Mathe lernen, hohe Priorität',
   'Welche Berechtigungen fehlen?',
   'Fasse mir die wichtigsten Technik-News zusammen',
+  'Suche Wikipedia nach Künstliche Intelligenz',
+  'Öffne Fokusmodus',
   'Öffne das Terminal',
   'Was muss ich heute noch machen?',
 ];
@@ -24,12 +26,12 @@ export const demoEvents: CalendarEvent[] = [
     date: isoDate(1),
     time: '08:00',
     reminderMinutes: 30,
-    notes: 'Demo-Termin, lokal gespeichert.',
+    notes: 'Lokal gespeichert.',
     provider: 'local-demo',
   },
   {
     id: createId(),
-    title: 'Projekt AWS Hack weiterbauen',
+    title: 'Projekt AWS KI Manager weiterbauen',
     date: isoDate(0),
     time: '18:30',
     reminderMinutes: 15,
@@ -40,7 +42,7 @@ export const demoEvents: CalendarEvent[] = [
 
 export const demoTasks: TaskItem[] = [
   { id: createId(), title: 'Mathe lernen', priority: 'hoch', status: 'offen', deadline: isoDate(1) },
-  { id: createId(), title: 'AWS Hack als PWA installieren', priority: 'mittel', status: 'läuft', deadline: isoDate(0) },
+  { id: createId(), title: 'AWS KI Manager als PWA installieren', priority: 'mittel', status: 'läuft', deadline: isoDate(0) },
   { id: createId(), title: 'Permission Center prüfen', priority: 'mittel', status: 'offen' },
 ];
 
@@ -49,7 +51,7 @@ export const initialMessages = (): ChatMessage[] => [
     id: createId(),
     role: 'assistant',
     content:
-      'AURA Core online. Ich arbeite lokal im Demo-Modus, erkenne deutsche Befehle und führe nur legale App-Aktionen mit deiner Freigabe aus.',
+      'AURA Core online. Kostenloser lokaler Modus aktiv; ich nutze Live-Quellen, wenn sie verfügbar sind, und führe App-Aktionen nur mit deiner Freigabe aus.',
     time: new Date().toISOString(),
     suggestions: exampleCommands.slice(0, 4),
   },

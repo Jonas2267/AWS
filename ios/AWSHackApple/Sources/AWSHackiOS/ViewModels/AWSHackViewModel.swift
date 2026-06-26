@@ -12,7 +12,10 @@ public final class AWSHackViewModel: ObservableObject {
     @Published public var permissions: [PermissionDescriptor] = PermissionDescriptor.defaultSet
     @Published public var messages: [ChatMessage] = [ChatMessage(role: .assistant, text: "AURA Core online. Keine heimlichen Zugriffe. Frage nach deinem Tag, Kalender, Wetter oder Aufgaben.")]
     @Published public var briefingText = ""
-    @Published public var snapshot = PersonalDataSnapshot(events: [], reminders: [], tasks: [], alarms: [], weather: WeatherSnapshot(locationName: "Demo", condition: "Lädt", temperatureCelsius: 0, rainChance: 0, advisory: ""), health: nil, headlines: [])
+    @Published public var navigationRecommendation: NavigationRecommendation?
+    @Published public var manualLocation = ""
+    @Published public var fileSummary: FileSummary?
+    @Published public var snapshot = PersonalDataSnapshot(events: [], reminders: [], tasks: [], alarms: [], weather: WeatherSnapshot(locationName: "Demo", condition: "Lädt", temperatureCelsius: 0, rainChance: 0, advisory: ""), health: nil, headlines: [], navigationRecommendation: nil)
 
     public let hub: PersonalDataHub
     private let parser = CommandParser()
@@ -86,6 +89,24 @@ public final class AWSHackViewModel: ObservableObject {
         briefingText = await dailyBriefing(username: account.username)
     }
 
+
+    public func searchNavigation(category: PlaceCategory, query: String? = nil) async {
+        navigationRecommendation = category == .fuel && (query?.localizedCaseInsensitiveContains("billigste") == true || query?.localizedCaseInsensitiveContains("günstigste") == true)
+            ? await hub.cheapestFuelStation()
+            : await hub.findPlaces(category: category, query: query)
+        activeTab = .navigation
+    }
+
+    public func openRouteURL(for place: PlaceResult, mode: NavigationMode = .driving) async -> URL {
+        await hub.navigationURL(for: place, mode: mode, preference: .automatic)
+    }
+
+
+    public func summarizeSelectedFile(name: String, contents: String) async {
+        fileSummary = try? await hub.files.summarizeSelectedFile(named: name, contents: contents)
+        activeTab = .data
+    }
+
     public func dailyBriefing(username: String) async -> String {
         let briefing = await hub.dailyBriefing(for: username)
         return DailyBriefingBuilder.response(username: username, briefing: briefing)
@@ -95,6 +116,7 @@ public final class AWSHackViewModel: ObservableObject {
 public enum LifeOSTab: String, CaseIterable, Identifiable {
     case assistant = "AURA"
     case dashboard = "Heute"
+    case navigation = "Route"
     case setup = "Setup"
     case permissions = "Rechte"
     case data = "Daten"
@@ -109,5 +131,5 @@ public struct ChatMessage: Identifiable, Equatable {
 }
 
 #else
-public enum LifeOSTab: String, CaseIterable, Identifiable { case assistant = "AURA", dashboard = "Heute", setup = "Setup", permissions = "Rechte", data = "Daten"; public var id: String { rawValue } }
+public enum LifeOSTab: String, CaseIterable, Identifiable { case assistant = "AURA", dashboard = "Heute", navigation = "Route", setup = "Setup", permissions = "Rechte", data = "Daten"; public var id: String { rawValue } }
 #endif

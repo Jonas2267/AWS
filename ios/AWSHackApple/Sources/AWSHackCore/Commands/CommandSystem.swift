@@ -3,7 +3,7 @@ import Foundation
 public enum AssistantIntent: String, Sendable, CaseIterable {
     case dailyBriefing, getTodayOverview, listCalendarEvents, createCalendarEvent, listReminders, createReminder
     case scheduleNotification, listAlarms, createAlarm, getWeather, summarizeTasks, createTask, summarizeFile
-    case searchContacts, requestPermission, openSettings, unknown
+    case searchContacts, findNearbyPlace, findCheapestFuel, startNavigation, requestPermission, openSettings, unknown
 }
 
 public struct CommandEntities: Sendable, Equatable {
@@ -12,14 +12,18 @@ public struct CommandEntities: Sendable, Equatable {
     public var reminderMinutes: Int?
     public var priority: TaskPriority?
     public var permission: PermissionKind?
+    public var placeCategory: PlaceCategory?
+    public var navigationMode: NavigationMode?
     public var missingFields: [String]
 
-    public init(title: String? = nil, date: Date? = nil, reminderMinutes: Int? = nil, priority: TaskPriority? = nil, permission: PermissionKind? = nil, missingFields: [String] = []) {
+    public init(title: String? = nil, date: Date? = nil, reminderMinutes: Int? = nil, priority: TaskPriority? = nil, permission: PermissionKind? = nil, placeCategory: PlaceCategory? = nil, navigationMode: NavigationMode? = nil, missingFields: [String] = []) {
         self.title = title
         self.date = date
         self.reminderMinutes = reminderMinutes
         self.priority = priority
         self.permission = permission
+        self.placeCategory = placeCategory
+        self.navigationMode = navigationMode
         self.missingFields = missingFields
     }
 }
@@ -56,6 +60,9 @@ public struct IntentDetector: Sendable {
 
     public func detect(_ input: String) -> AssistantIntent {
         let text = input.normalizedGerman
+        if text.containsAny(["billigste tankstelle", "guenstigste tankstelle", "günstigste tankstelle"]) { return .findCheapestFuel }
+        if text.containsAny(["route starten", "navigation starten"]) { return .startNavigation }
+        if text.containsAny(["navigiere", "bring mich", "finde", "suche", "wo ist", "zeig mir", "schnellsten weg"]) && text.detectPlaceCategory() != nil { return .findNearbyPlace }
         if text.containsAny(["morgen briefing", "tagesbriefing", "wie sieht mein tag", "wichtigsten infos", "mein tag heute"]) { return .dailyBriefing }
         if text.containsAny(["was steht heute", "heute im kalender", "naechster termin", "kalender"]) && !text.containsAny(["erstelle", "plane"]) { return .listCalendarEvents }
         if text.containsAny(["termin", "event", "kalender"]) && text.containsAny(["erstelle", "plane", "trag", "anlegen"]) { return .createCalendarEvent }
@@ -84,6 +91,8 @@ public struct EntityExtractor: Sendable {
         entities.reminderMinutes = Self.parseReminderMinutes(text)
         entities.priority = text.containsAny(["hoch", "dringend", "wichtig"]) ? .high : text.contains("niedrig") ? .low : .medium
         entities.permission = PermissionKind.allCases.first { text.contains($0.title.normalizedGerman) }
+        entities.placeCategory = text.detectPlaceCategory()
+        entities.navigationMode = text.contains("zu fuss") ? .walking : text.contains("fahrrad") ? .cycling : text.contains("oepnv") ? .transit : .driving
         entities.title = Self.parseTitle(input, intent: intent)
         return entities
     }
@@ -132,7 +141,7 @@ public struct EntityExtractor: Sendable {
         var title = input
         ["Erstelle", "erstelle", "Plane", "plane", "Termin", "termin", "Aufgabe", "aufgabe", "Erinnerung", "erinnerung", "Wecker", "wecker", "morgen", "heute", "einen", "eine", "ein", "den", "die", "das", "um"].forEach { title = title.replacingOccurrences(of: $0, with: "") }
         title = title.replacingOccurrences(of: #"\d{1,2}([:\.]\d{2})?\s*uhr"#, with: "", options: [.regularExpression, .caseInsensitive])
-        if [.dailyBriefing, .getWeather, .listCalendarEvents, .summarizeTasks, .requestPermission, .unknown].contains(intent) { return nil }
+        if [.dailyBriefing, .getWeather, .listCalendarEvents, .summarizeTasks, .requestPermission, .findNearbyPlace, .findCheapestFuel, .startNavigation, .unknown].contains(intent) { return nil }
         return title.trimmedNilIfEmpty
     }
 }
@@ -189,6 +198,18 @@ public struct CommandExecutor: Sendable {
                 return "Wähle eine Datei über den Document Picker aus. Ich lese nichts heimlich."
             case .searchContacts:
                 return "Kontaktsuche benötigt Contacts-Freigabe. Ohne Freigabe kannst du Namen manuell eingeben."
+            case .findCheapestFuel:
+                let recommendation = await hub.cheapestFuelStation()
+                return NavigationResponseBuilder.response(for: recommendation)
+            case .findNearbyPlace:
+                let category = command.entities.placeCategory ?? .restaurant
+                let recommendation = await hub.findPlaces(category: category, query: command.rawText)
+                return NavigationResponseBuilder.response(for: recommendation)
+            case .startNavigation:
+                let recommendation = await hub.findPlaces(category: command.entities.placeCategory ?? .home, query: command.rawText)
+                guard let destination = recommendation.recommended else { return "Ich brauche ein Ziel. Beispiel: Navigiere mich zur nächsten Tankstelle." }
+                let url = await hub.navigationURL(for: destination, mode: command.entities.navigationMode ?? .driving)
+                return "Route vorbereitet: \(destination.name). Öffne diesen Kartenlink: \(url.absoluteString)"
             case .requestPermission:
                 let missing = await permissions.descriptors().filter { $0.recommended && $0.state != .granted }
                 return missing.isEmpty ? "Alle empfohlenen Berechtigungen sind aktiv." : "Es fehlen: \(missing.map { $0.id.title }.joined(separator: ", ")). Öffne das Permission Center."
@@ -200,6 +221,15 @@ public struct CommandExecutor: Sendable {
         } catch {
             return "Ich konnte die Aktion nicht abschließen: \(error.localizedDescription)"
         }
+    }
+}
+
+public struct NavigationResponseBuilder: Sendable {
+    public static func response(for recommendation: NavigationRecommendation) -> String {
+        guard let place = recommendation.recommended else { return recommendation.explanation }
+        let price = place.fuelPricePerLiter.map { " · \(String(format: "%.2f", $0)) €/L" } ?? ""
+        let demo = recommendation.usedDemoData ? " Demo-Daten." : ""
+        return "\(recommendation.explanation) Ziel: \(place.name), \(String(format: "%.1f", place.distanceKilometers)) km, \(place.estimatedTravelMinutes) Min, \(place.isOpen ? "offen" : "geschlossen")\(price). Soll ich Apple Karten öffnen?\(demo)"
     }
 }
 
@@ -218,6 +248,24 @@ private extension String {
     }
 
     func containsAny(_ needles: [String]) -> Bool { needles.contains { normalizedGerman.contains($0.normalizedGerman) } }
+    func detectPlaceCategory() -> PlaceCategory? {
+        if containsAny(["tankstelle", "benzin", "diesel", "tanken"]) { return .fuel }
+        if containsAny(["supermarkt", "lebensmittel", "markt"]) { return .supermarket }
+        if containsAny(["apotheke"]) { return .pharmacy }
+        if containsAny(["krankenhaus", "notfall"]) { return .hospital }
+        if containsAny(["parkplatz", "parken"]) { return .parking }
+        if containsAny(["werkstatt", "auto reparatur"]) { return .workshop }
+        if containsAny(["mcdonald", "restaurant", "fast food", "essen"]) { return .restaurant }
+        if containsAny(["kleidung", "kleidungsladen", "klamotten"]) { return .clothing }
+        if containsAny(["geldautomat", "atm", "bankautomat"]) { return .atm }
+        if containsAny(["schule"]) { return .school }
+        if containsAny(["arbeit", "buero", "büro"]) { return .work }
+        if containsAny(["zuhause", "nach hause", "home"]) { return .home }
+        if containsAny(["paketstation", "paket"]) { return .parcelStation }
+        if containsAny(["ladestation", "elektro", "ev charging"]) { return .evCharging }
+        return nil
+    }
+
     var trimmedNilIfEmpty: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
         return trimmed.isEmpty ? nil : trimmed

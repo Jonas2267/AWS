@@ -119,3 +119,39 @@ private extension EKAlarm {
     var minutesBefore: Int { Int(abs(relativeOffset) / 60) }
 }
 #endif
+
+public final class AppleLocationProvider: NSObject, LocationProviding, @unchecked Sendable {
+    #if canImport(CoreLocation)
+    private let manager = CLLocationManager()
+    #endif
+
+    public override init() { super.init() }
+
+    public func requestWhenInUseAuthorization() async -> PermissionState {
+        #if canImport(CoreLocation)
+        manager.requestWhenInUseAuthorization()
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse: return .granted
+        case .denied: return .denied
+        case .restricted: return .restricted
+        case .notDetermined: return .notRequested
+        @unknown default: return .restricted
+        }
+        #else
+        return .demo
+        #endif
+    }
+
+    public func currentLocation() async throws -> UserLocation {
+        #if canImport(CoreLocation)
+        guard let location = manager.location else { return try await DemoLocationProvider().currentLocation() }
+        return UserLocation(coordinate: Coordinate(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude), label: "Aktueller Standort", isDemo: false)
+        #else
+        return try await DemoLocationProvider().currentLocation()
+        #endif
+    }
+
+    public func manualLocation(address: String) async throws -> UserLocation {
+        try await DemoLocationProvider().manualLocation(address: address)
+    }
+}

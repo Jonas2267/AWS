@@ -1,2 +1,36 @@
 import type { Config } from 'tailwindcss';
-export default { content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'], theme: { extend: { colors: { cyber: { bg:'#020604', panel:'#07110d', green:'#39ff88', dim:'#8bb99f' } }, boxShadow: { glow:'0 0 32px rgba(57,255,136,.35)', hard:'0 20px 80px rgba(0,0,0,.55)' }, animation: { pulseGlow:'pulseGlow 2.4s ease-in-out infinite', scan:'scan 5s linear infinite', boot:'boot .7s both' }, keyframes: { pulseGlow:{'0%,100%':{opacity:.68,transform:'scale(.98)'},'50%':{opacity:1,transform:'scale(1.03)'}}, scan:{from:{transform:'translateY(-100%)'},to:{transform:'translateY(100%)'}}, boot:{from:{opacity:0,filter:'blur(12px)',transform:'translateY(12px)'},to:{opacity:1,filter:'blur(0)',transform:'translateY(0)'}} } } }, plugins: [] } satisfies Config;
+
+export default {
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        cyber: { bg: '#020604', panel: '#07110d', green: '#39ff88', dim: '#8bb99f' },
+      },
+      boxShadow: {
+        glow: '0 0 32px rgba(57,255,136,.35)',
+        hard: '0 20px 80px rgba(0,0,0,.55)',
+      },
+      animation: {
+        pulseGlow: 'pulseGlow 2.4s ease-in-out infinite',
+        scan: 'scan 5s linear infinite',
+        boot: 'boot .7s both',
+      },
+      keyframes: {
+        pulseGlow: {
+          '0%,100%': { opacity: '0.68', transform: 'scale(.98)' },
+          '50%': { opacity: '1', transform: 'scale(1.03)' },
+        },
+        scan: {
+          from: { transform: 'translateY(-100%)' },
+          to: { transform: 'translateY(100%)' },
+        },
+        boot: {
+          from: { opacity: '0', filter: 'blur(12px)', transform: 'translateY(12px)' },
+          to: { opacity: '1', filter: 'blur(0)', transform: 'translateY(0)' },
+        },
+      },
+    },
+  },
+  plugins: [],
+} satisfies Config;

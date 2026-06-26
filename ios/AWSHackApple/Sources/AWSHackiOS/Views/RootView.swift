@@ -1,5 +1,6 @@
 #if canImport(SwiftUI)
 import SwiftUI
+import UniformTypeIdentifiers
 import AWSHackCore
 
 struct RootView: View {
@@ -25,6 +26,7 @@ struct LifeOSView: View {
                 switch viewModel.activeTab {
                 case .assistant: AssistantView()
                 case .dashboard: DashboardView()
+                case .navigation: NavigationView()
                 case .setup: SetupWizardView()
                 case .permissions: PermissionCenterView()
                 case .data: DataHubView()
@@ -93,7 +95,7 @@ struct AccountView: View {
 struct AssistantView: View {
     @EnvironmentObject private var viewModel: AWSHackViewModel
     @State private var input = ""
-    private let suggestions = ["Mach mir mein Morgen-Briefing", "Erstelle morgen um 8 Uhr einen Termin Schule", "Was muss ich heute noch machen?", "Wie ist das Wetter heute?"]
+    private let suggestions = ["Mach mir mein Morgen-Briefing", "Navigiere mich zur nächsten Tankstelle", "Finde die billigste Tankstelle in der Nähe", "Suche einen McDonald’s in der Nähe"]
 
     var body: some View {
         VStack(spacing: 12) {
@@ -177,9 +179,78 @@ struct DashboardView: View {
                 InfoCard(title: "Nächster Alarm", value: viewModel.snapshot.alarms.first?.title ?? "Kein AWS-Hack-Wecker", detail: viewModel.snapshot.alarms.first?.fireDate.formatted(date: .omitted, time: .shortened) ?? "")
                 InfoCard(title: "Wetter", value: "\(Int(viewModel.snapshot.weather.temperatureCelsius))°C · \(viewModel.snapshot.weather.condition)", detail: viewModel.snapshot.weather.advisory)
                 InfoCard(title: "Offene Aufgaben", value: "\(viewModel.snapshot.tasks.count)", detail: viewModel.snapshot.tasks.map(\.title).joined(separator: ", "))
+                InfoCard(title: "Navigation", value: viewModel.navigationRecommendation?.recommended?.name ?? "Wohin?", detail: viewModel.navigationRecommendation?.explanation ?? "Suche Alltagspunkte in deiner Nähe mit Demo-Daten oder Standortfreigabe.")
+                QuickNavigationGrid()
                 InfoCard(title: "Berechtigungen", value: "\(viewModel.permissions.filter { $0.state == .granted }.count)/\(viewModel.permissions.count)", detail: "Alles bleibt freiwillig und einzeln kontrollierbar.")
             }.padding(20)
         }
+    }
+}
+
+
+struct NavigationView: View {
+    @EnvironmentObject private var viewModel: AWSHackViewModel
+    @Environment(\.openURL) private var openURL
+    @State private var query = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Navigation").font(.largeTitle.bold())
+                Text("Standort nur bei Nutzung. Ohne Freigabe nutzt AURA Demo-Orte oder deine manuelle Adresse.").font(.footnote).foregroundStyle(.secondary)
+                HStack {
+                    TextField("Wohin?", text: $query)
+                        .padding(16)
+                        .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 22))
+                    Button("Suchen") { Task { await viewModel.searchNavigation(category: query.detectPlaceCategoryForUI() ?? .restaurant, query: query) } }.buttonStyle(CyberButtonStyle(compact: true))
+                }
+                QuickNavigationGrid()
+                if let recommendation = viewModel.navigationRecommendation {
+                    Text(recommendation.explanation).padding().background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 24))
+                    ForEach(([recommendation.recommended].compactMap { $0 } + recommendation.alternatives)) { place in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack { Text(place.name).font(.headline); Spacer(); Text(place.isDemo ? "Demo" : "Live").font(.caption).padding(6).background(.green.opacity(0.16), in: Capsule()) }
+                            Text("\(String(format: "%.1f", place.distanceKilometers)) km · \(place.estimatedTravelMinutes) Min · \(place.isOpen ? "offen" : "geschlossen")")
+                            if let price = place.fuelPricePerLiter { Text("Preis: \(String(format: "%.2f", price)) €/L") }
+                            Text(place.address).font(.footnote).foregroundStyle(.secondary)
+                            Button("Route starten") { Task { let url = await viewModel.openRouteURL(for: place); openURL(url) } }.buttonStyle(CyberButtonStyle())
+                        }.padding().background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 24)).overlay(RoundedRectangle(cornerRadius: 24).stroke(.green.opacity(0.16)))
+                    }
+                }
+            }.padding(20)
+        }
+    }
+}
+
+struct QuickNavigationGrid: View {
+    @EnvironmentObject private var viewModel: AWSHackViewModel
+    private let items: [(String, PlaceCategory)] = [("Tankstelle", .fuel), ("Billig tanken", .fuel), ("Supermarkt", .supermarket), ("Apotheke", .pharmacy), ("Parkplatz", .parking), ("Werkstatt", .workshop), ("Fast Food", .restaurant), ("Geldautomat", .atm), ("Zuhause", .home), ("Schule", .school)]
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], spacing: 10) {
+            ForEach(items, id: \.0) { label, category in
+                Button(label) { Task { await viewModel.searchNavigation(category: category, query: label) } }.buttonStyle(ChipButtonStyle())
+            }
+        }
+    }
+}
+
+private extension String {
+    func detectPlaceCategoryForUI() -> PlaceCategory? {
+        let text = lowercased()
+        if text.contains("tank") { return .fuel }
+        if text.contains("super") { return .supermarket }
+        if text.contains("apothe") { return .pharmacy }
+        if text.contains("park") { return .parking }
+        if text.contains("werkstatt") { return .workshop }
+        if text.contains("mcdonald") || text.contains("essen") { return .restaurant }
+        if text.contains("kleidung") { return .clothing }
+        if text.contains("geld") || text.contains("atm") { return .atm }
+        if text.contains("schule") { return .school }
+        if text.contains("arbeit") { return .work }
+        if text.contains("zuhause") || text.contains("home") { return .home }
+        if text.contains("paket") { return .parcelStation }
+        if text.contains("lade") { return .evCharging }
+        return nil
     }
 }
 
@@ -221,8 +292,36 @@ struct DataHubView: View {
             InfoCard(title: "Kalender", value: "\(viewModel.snapshot.events.count) heute", detail: "EventKit oder DemoProvider")
             InfoCard(title: "Erinnerungen", value: "\(viewModel.snapshot.reminders.count)", detail: "EventKit Reminders oder Demo")
             InfoCard(title: "News", value: viewModel.snapshot.headlines.first ?? "Demo-News", detail: viewModel.snapshot.headlines.dropFirst().joined(separator: ", "))
+            FileSummaryCard()
             InfoCard(title: "Dateien & Chats", value: "Share Sheet / Document Picker", detail: "iMessage, WhatsApp & Co. werden nicht heimlich gelesen.")
         }.padding(20) }
+    }
+}
+
+
+struct FileSummaryCard: View {
+    @EnvironmentObject private var viewModel: AWSHackViewModel
+    @State private var isImporterPresented = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("DATEI-ZUSAMMENFASSUNG").font(.caption.weight(.bold)).tracking(3).foregroundStyle(.green.opacity(0.75))
+            Text(viewModel.fileSummary?.fileName ?? "Keine Datei ausgewählt").font(.headline)
+            Text(viewModel.fileSummary?.summary ?? "Öffne eine Textdatei aktiv über den Document Picker. Keine heimlichen Dateizugriffe.").font(.footnote).foregroundStyle(.secondary)
+            Button("Datei auswählen") { isImporterPresented = true }.buttonStyle(CyberButtonStyle())
+        }
+        .padding()
+        .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 24))
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(.green.opacity(0.18)))
+        .fileImporter(isPresented: $isImporterPresented, allowedContentTypes: [.plainText, .text, .utf8PlainText]) { result in
+            guard case let .success(url) = result else { return }
+            Task {
+                let access = url.startAccessingSecurityScopedResource()
+                defer { if access { url.stopAccessingSecurityScopedResource() } }
+                let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                await viewModel.summarizeSelectedFile(name: url.lastPathComponent, contents: text)
+            }
+        }
     }
 }
 
@@ -243,7 +342,7 @@ struct BottomNav: View {
         }.padding(10).background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 28)).padding(.horizontal).padding(.bottom, 8)
     }
     private func icon(for tab: LifeOSTab) -> String {
-        switch tab { case .assistant: "circle.hexagongrid.fill"; case .dashboard: "sun.max.fill"; case .setup: "wand.and.stars"; case .permissions: "lock.shield.fill"; case .data: "square.stack.3d.up.fill" }
+        switch tab { case .assistant: "circle.hexagongrid.fill"; case .dashboard: "sun.max.fill"; case .navigation: "location.north.line.fill"; case .setup: "wand.and.stars"; case .permissions: "lock.shield.fill"; case .data: "square.stack.3d.up.fill" }
     }
 }
 

@@ -4,7 +4,7 @@ import AWSHackCore
 
 @main
 struct AWSHackApp: App {
-    @StateObject private var viewModel = AWSHackViewModel()
+    @StateObject private var viewModel = AWSHackViewModel(credentialStore: KeychainCredentialStore())
 
     var body: some Scene {
         WindowGroup {

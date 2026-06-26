@@ -20,12 +20,14 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 18% 10%, rgba(57, 255, 136, .18), transparent 30%),
-    radial-gradient(circle at 84% 6%, rgba(37, 180, 255, .15), transparent 28%),
-    radial-gradient(circle at 50% 100%, rgba(57, 255, 136, .08), transparent 34%),
-    linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px);
-  background-size: auto, auto, auto, 38px 38px, 38px 38px;
+    radial-gradient(circle at 20% 5%, rgba(57, 255, 136, .22), transparent 29%),
+    radial-gradient(circle at 84% 8%, rgba(75, 210, 255, .18), transparent 28%),
+    radial-gradient(circle at 52% 100%, rgba(57, 255, 136, .10), transparent 34%),
+    linear-gradient(115deg, rgba(255,255,255,.045), transparent 28%, rgba(57,255,136,.045), transparent 60%),
+    linear-gradient(rgba(255,255,255,.024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.024) 1px, transparent 1px);
+  background-size: auto, auto, auto, auto, 38px 38px, 38px 38px;
+  animation: aurora 18s ease-in-out infinite alternate;
 }
 
 body::after {
@@ -40,25 +42,29 @@ body::after {
 }
 
 @layer components {
-  .glass { @apply border border-green-300/15 bg-black/35 backdrop-blur-2xl shadow-hard; }
-  .window { @apply glass rounded-3xl p-4 md:p-5 transition duration-300 animate-boot; }
-  .cyber-btn { @apply rounded-2xl border border-green-300/25 bg-green-400/10 px-4 py-3 text-sm font-bold text-green-50 transition active:scale-[.98] hover:border-green-300/70 hover:bg-green-300/20 hover:shadow-glow; }
-  .touch-btn { @apply min-h-14 rounded-3xl border border-green-300/20 bg-green-300/10 px-5 py-4 text-left font-semibold text-green-50 active:scale-[.99]; }
-  .field { @apply w-full rounded-2xl border border-green-300/20 bg-black/45 px-4 py-4 text-green-50 outline-none placeholder:text-green-100/35 focus:border-green-300/70 focus:shadow-glow; }
+  .glass { @apply border border-white/10 bg-white/[.055] backdrop-blur-2xl shadow-hard; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 24px 80px rgba(0,0,0,.42); }
+  .window { @apply glass rounded-[2rem] p-4 md:p-5 transition duration-300 animate-boot; }
+  .liquid-focus { background: linear-gradient(145deg, rgba(255,255,255,.08), rgba(57,255,136,.055) 45%, rgba(58,190,255,.055)); }
+  .cyber-btn { @apply rounded-2xl border border-green-300/25 bg-white/[.055] px-4 py-3 text-sm font-bold text-green-50 transition active:scale-[.98] hover:border-green-300/70 hover:bg-green-300/15 hover:shadow-glow; }
+  .touch-btn { @apply min-h-14 rounded-3xl border border-white/10 bg-white/[.06] px-5 py-4 text-left font-semibold text-green-50 transition active:scale-[.99] hover:border-green-300/40 hover:bg-green-300/10; }
+  .field { @apply w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-4 text-green-50 outline-none placeholder:text-green-100/35 focus:border-green-300/70 focus:shadow-glow; }
   .tiny { @apply text-xs uppercase tracking-[.28em] text-green-300/70; }
-  .card { @apply rounded-3xl border border-green-300/15 bg-green-300/[.06] p-4 shadow-hard; }
+  .card { @apply rounded-3xl border border-white/10 bg-white/[.055] p-4 shadow-hard transition hover:border-green-300/30 hover:bg-green-300/[.075]; }
 }
 
 .jarvis-core {
   background:
-    conic-gradient(from 90deg, rgba(57,255,136,.1), rgba(57,255,136,.7), rgba(58,190,255,.45), rgba(57,255,136,.1)),
-    radial-gradient(circle, rgba(57,255,136,.25), rgba(0,0,0,.35) 55%, transparent 70%);
-  box-shadow: 0 0 70px rgba(57,255,136,.35), inset 0 0 44px rgba(57,255,136,.2);
+    conic-gradient(from 90deg, rgba(57,255,136,.08), rgba(57,255,136,.75), rgba(58,190,255,.55), rgba(255,255,255,.08), rgba(57,255,136,.08)),
+    radial-gradient(circle, rgba(57,255,136,.30), rgba(0,0,0,.24) 54%, transparent 72%);
+  box-shadow: 0 0 90px rgba(57,255,136,.42), inset 0 0 58px rgba(57,255,136,.24);
+  filter: drop-shadow(0 0 24px rgba(57,255,136,.25));
 }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
 
+@keyframes scan { from { transform: translateY(-120%); } to { transform: translateY(120%); } }
+@keyframes aurora { from { filter: hue-rotate(0deg) brightness(1); transform: scale(1); } to { filter: hue-rotate(12deg) brightness(1.14); transform: scale(1.025); } }
 @keyframes scan {
   from { transform: translateY(-120%); }
   to { transform: translateY(120%); }

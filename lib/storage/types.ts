@@ -1,10 +1,13 @@
 export type PermissionStatus = 'demo' | 'requested' | 'granted' | 'denied' | 'disconnected';
-export type ModuleId = 'assistant' | 'dashboard' | 'calendar' | 'tasks' | 'news' | 'permissions' | 'terminal' | 'files' | 'system' | 'setup';
+export type DataMode = 'demo' | 'live' | 'mixed';
+export type SourceStatus = 'live' | 'local' | 'demo' | 'api-missing' | 'permission-missing' | 'offline';
+export type ModuleId = 'assistant' | 'dashboard' | 'calendar' | 'tasks' | 'news' | 'wiki' | 'today' | 'notes' | 'focus' | 'navigation' | 'permissions' | 'terminal' | 'files' | 'system' | 'setup';
 export type TaskPriority = 'niedrig' | 'mittel' | 'hoch';
 export type TaskStatus = 'offen' | 'läuft' | 'erledigt';
 
 export type UserAccount = {
   username: string;
+  style?: 'professionell' | 'futuristisch' | 'minimal';
   passwordHash: string;
   initials: string;
   createdAt: string;
@@ -46,6 +49,64 @@ export type NewsItem = {
   summary: string;
   source: string;
   publishedAt: string;
+  url?: string;
+  status?: SourceStatus;
+};
+
+export type WeatherSnapshot = {
+  location: string;
+  temperatureC: number;
+  condition: string;
+  precipitationProbability?: number;
+  source: SourceStatus;
+  updatedAt: string;
+};
+
+export type BrowserLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  updatedAt: string;
+};
+
+export type PlaceCategory = 'fuel' | 'supermarket' | 'pharmacy' | 'hospital' | 'parking' | 'workshop' | 'restaurant' | 'clothing' | 'atm' | 'parcel' | 'charging' | 'home' | 'school' | 'work';
+
+export type PlaceResult = {
+  id: string;
+  name: string;
+  category: PlaceCategory;
+  address: string;
+  distanceKm: number;
+  travelMinutes: number;
+  rating?: number;
+  openNow?: boolean;
+  fuelPriceEur?: number;
+  latitude: number;
+  longitude: number;
+  source: SourceStatus;
+};
+
+export type WikiSummary = {
+  title: string;
+  extract: string;
+  url: string;
+  source: SourceStatus;
+};
+
+export type NoteItem = {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FocusSession = {
+  taskId?: string;
+  minutes: number;
+  startedAt?: string;
+  endsAt?: string;
+  active: boolean;
 };
 
 export type ChatMessage = {
@@ -73,6 +134,14 @@ export type ToastMessage = {
 };
 
 export type AppState = {
+  dataMode?: DataMode;
+  runtime?: {
+    location?: BrowserLocation;
+    microphoneActive?: boolean;
+    speechSupported?: boolean;
+    weather?: WeatherSnapshot;
+    wiki?: WikiSummary;
+  };
   user: UserAccount | null;
   session: boolean;
   events: CalendarEvent[];
@@ -80,6 +149,8 @@ export type AppState = {
   permissions: PermissionItem[];
   messages: ChatMessage[];
   reminders: Reminder[];
+  notes?: NoteItem[];
+  focus?: FocusSession;
   activeModule: ModuleId;
   booted: boolean;
   setupStep: number;

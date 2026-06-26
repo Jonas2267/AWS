@@ -2,29 +2,43 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { executeCommand, parseUserCommand, returnAssistantResponse } from '@/lib/commands/commands';
-import { newsCategories, demoNews, summarizeNews } from '@/lib/news/news';
+import { LiveNewsProvider, newsCategories, demoNews, summarizeNews } from '@/lib/news/news';
+import { BrowserLocationProvider, DemoPlacesProvider, MapsLinkNavigationProvider, bestFuelRecommendation, navigationCategories } from '@/lib/navigation/navigation';
+import { LiveWeatherProvider } from '@/lib/weather/weather';
 import { BrowserNotificationProvider, registerServiceWorker } from '@/lib/notifications/notifications';
 import { defaultPermissions } from '@/lib/permissions/permissions';
 import { buildReminders, demoEvents, demoTasks, exampleCommands, initialMessages } from '@/lib/storage/demoData';
 import { createId, hashPassword, LocalStorageProvider } from '@/lib/storage/localStorageProvider';
-import type { AppState, CalendarEvent, ModuleId, TaskItem, ToastMessage } from '@/lib/storage/types';
+import type { AppState, CalendarEvent, ModuleId, NoteItem, PlaceCategory, PlaceResult, SourceStatus, TaskItem, ToastMessage, WikiSummary } from '@/lib/storage/types';
 
-const store = new LocalStorageProvider<AppState>('awsHack.state.v2');
+const store = new LocalStorageProvider<AppState>('awsKiManager.state.v3');
 const notifier = new BrowserNotificationProvider();
+const liveNews = new LiveNewsProvider();
+const weatherProvider = new LiveWeatherProvider();
+const locationProvider = new BrowserLocationProvider();
+const placesProvider = new DemoPlacesProvider();
+const mapsProvider = new MapsLinkNavigationProvider();
 const setupSteps = ['Konto', 'Benachrichtigungen', 'Kalender', 'News', 'Dateien', 'Mikrofon', 'PWA', 'Fertig'];
 const navItems: Array<{ id: ModuleId; label: string; icon: string }> = [
+  { id: 'today', label: 'Heute', icon: '✦' },
   { id: 'assistant', label: 'AURA', icon: '◉' },
-  { id: 'dashboard', label: 'OS', icon: '⌂' },
+  { id: 'dashboard', label: 'Dashboard', icon: '⌂' },
   { id: 'calendar', label: 'Kalender', icon: '◇' },
   { id: 'tasks', label: 'Tasks', icon: '✓' },
   { id: 'permissions', label: 'Rechte', icon: '⛨' },
   { id: 'news', label: 'News', icon: '⌁' },
+  { id: 'wiki', label: 'Wissen', icon: '⌕' },
+  { id: 'navigation', label: 'Navigation', icon: '⌖' },
+  { id: 'notes', label: 'Notizen', icon: '✎' },
+  { id: 'focus', label: 'Fokus', icon: '◌' },
   { id: 'terminal', label: 'Terminal', icon: '>' },
   { id: 'files', label: 'Dateien', icon: '▣' },
   { id: 'system', label: 'System', icon: '▤' },
 ];
 
 const initialState = (): AppState => ({
+  dataMode: 'mixed',
+  runtime: { speechSupported: false },
   user: null,
   session: false,
   events: demoEvents,
@@ -32,6 +46,9 @@ const initialState = (): AppState => ({
   permissions: defaultPermissions,
   messages: initialMessages(),
   reminders: buildReminders(demoEvents),
+  notes: [],
+  focus: { minutes: 25, active: false },
+  activeModule: 'today',
   activeModule: 'assistant',
   booted: false,
   setupStep: 0,
@@ -42,6 +59,7 @@ export default function Page() {
   const [state, setRawState] = useState<AppState>(initialState);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const setState = useCallback((next: AppState | ((current: AppState) => AppState)) => {
     setRawState((current) => {
@@ -57,7 +75,8 @@ export default function Page() {
 
   useEffect(() => {
     const saved = store.load();
-    setRawState(saved ?? initialState());
+    const base = initialState();
+    setRawState(saved ? { ...base, ...saved, runtime: { ...base.runtime, ...saved.runtime }, notes: saved.notes ?? [], focus: saved.focus ?? base.focus, dataMode: saved.dataMode ?? 'mixed' } : base);
     setReady(true);
     registerServiceWorker().catch(() => undefined);
   }, []);
@@ -75,13 +94,24 @@ export default function Page() {
   }, [toast]);
 
   useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  useEffect(() => {
     if (!state.session) return;
     const interval = window.setInterval(() => {
       const now = Date.now();
       const due = state.reminders.find((reminder) => !reminder.delivered && new Date(reminder.dueAt).getTime() <= now);
       if (!due) return;
 
-      notifier.send('AWS Hack Reminder', `${due.title} startet in ${due.minutesBefore} Minuten.`).then((channel) => {
+      notifier.send('AWS KI Manager Reminder', `${due.title} startet in ${due.minutesBefore} Minuten.`).then((channel) => {
         if (channel === 'fallback') {
           notifyInApp({ tone: 'warning', title: 'In-App Reminder', body: `${due.title} startet bald.` });
         }
@@ -115,16 +145,38 @@ export default function Page() {
         </section>
       </div>
       <MobileBottomNav state={state} setState={setState} />
+      {paletteOpen ? <CommandPalette setState={setState} close={() => setPaletteOpen(false)} /> : null}
       {toast ? <Toast toast={toast} /> : null}
     </main>
   );
+}
+
+
+function CommandPalette({ setState, close }: { setState: (next: AppState | ((current: AppState) => AppState)) => void; close: () => void }) {
+  const [query, setQuery] = useState('');
+  const commands: Array<{ label: string; module: ModuleId; hint: string }> = [
+    { label: 'Heute öffnen', module: 'today', hint: 'Tagesbriefing und Schnellzugriffe' },
+    { label: 'News suchen', module: 'news', hint: 'RSS/Live/Fallback Nachrichten' },
+    { label: 'Wetter anzeigen', module: 'dashboard', hint: 'Open-Meteo kostenlos' },
+    { label: 'Route planen', module: 'navigation', hint: 'Maps-Links und Orte' },
+    { label: 'Aufgabe erstellen', module: 'tasks', hint: 'Lokale Tasks' },
+    { label: 'Datei zusammenfassen', module: 'files', hint: 'Nur per File Picker' },
+    { label: 'Wikipedia suchen', module: 'wiki', hint: 'Kostenlose Wissenssuche' },
+    { label: 'Berechtigungen öffnen', module: 'permissions', hint: 'Browser-Freigaben' },
+    { label: 'Fokusmodus starten', module: 'focus', hint: 'Lokaler Timer' },
+    { label: 'Notizen öffnen', module: 'notes', hint: 'Lokaler Speicher' },
+  ];
+  const filtered = commands.filter((command) => `${command.label} ${command.hint}`.toLowerCase().includes(query.toLowerCase()));
+  function open(module: ModuleId) { setState((current) => ({ ...current, activeModule: module })); close(); }
+  return <div className="fixed inset-0 z-50 grid place-items-start bg-black/55 p-4 pt-24 backdrop-blur-xl" onClick={close}><div className="window mx-auto w-full max-w-2xl" onClick={(event) => event.stopPropagation()}><p className="tiny">Command Palette · Ctrl K</p><input className="field mt-4" autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Funktion suchen…" /> <div className="mt-4 grid gap-2">{filtered.map((command) => <button key={command.label} className="touch-btn" onClick={() => open(command.module)}><span className="block font-black">{command.label}</span><span className="text-sm text-green-100/55">{command.hint}</span></button>)}</div></div></div>;
 }
 
 function AuthScreen({ state, setState, notify }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void; notify: (message: Omit<ToastMessage, 'id'>) => void }) {
   const [mode, setMode] = useState(state.user ? 'login' : 'create');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('Lokale Demo-Auth. Produktion benötigt Backend/Auth und sichere Sessions.');
+  const [style, setStyle] = useState<'professionell' | 'futuristisch' | 'minimal'>('professionell');
+  const [message, setMessage] = useState(state.user ? `Willkommen zurück, ${state.user.username}. ${new Date().toLocaleDateString('de-DE')}` : 'Kostenloser lokaler Account. Passwort wird gehasht, nie sichtbar angezeigt.');
 
   async function submit() {
     if (!username.trim() || password.length < 4) {
@@ -137,13 +189,14 @@ function AuthScreen({ state, setState, notify }: { state: AppState; setState: (n
         username: username.trim(),
         passwordHash: await hashPassword(password),
         initials: username.trim().slice(0, 2).toUpperCase(),
+        style,
         createdAt: new Date().toISOString(),
         setupCompleted: false,
       };
       setState((current) => ({ ...current, user, session: false, setupStep: 1 }));
       setMode('login');
-      setMessage('Account lokal erstellt. Bitte einloggen, danach startet der Setup-Assistent.');
-      notify({ tone: 'success', title: 'Account erstellt', body: 'Deine Daten bleiben lokal im Browser-Demo-Speicher.' });
+      setMessage('Account lokal erstellt. Willkommen im AWS KI Manager.');
+      notify({ tone: 'success', title: 'Account erstellt', body: 'Deine Daten bleiben lokal in deinem Browser-Speicher.' });
       return;
     }
 
@@ -153,26 +206,28 @@ function AuthScreen({ state, setState, notify }: { state: AppState; setState: (n
       return;
     }
 
-    setState((current) => ({ ...current, session: true, booted: false, activeModule: current.user?.setupCompleted ? 'assistant' : 'setup' }));
+    setState((current) => ({ ...current, session: true, booted: false, activeModule: current.user?.setupCompleted ? 'today' : 'setup' }));
   }
 
   return (
     <main className="grid min-h-screen place-items-center p-4">
       <section className="window grid w-full max-w-6xl gap-8 overflow-hidden md:grid-cols-[1.08fr_.92fr]">
         <div className="relative rounded-[2rem] border border-green-300/15 bg-green-300/[.06] p-6 md:p-8">
-          <p className="tiny">Artificial Workstation System Hack</p>
-          <h1 className="mt-4 text-5xl font-black leading-none text-green-50 md:text-7xl">AWS Hack</h1>
+          <p className="tiny">Artificial Workstation System KI Manager</p>
+          <h1 className="mt-4 text-5xl font-black leading-none text-green-50 md:text-7xl">AWS KI Manager</h1>
           <p className="mt-5 max-w-xl text-green-100/75">
-            Dein legales Jarvis-Cyber-OS für eigenes Handy und eigenen PC. Alles, was nach Hack aussieht, ist UI, Simulation oder freigegebene lokale Automation.
+            Dein kostenloses Personal-KI-OS für Alltag, Arbeit, Schule, Wissen, Wetter, News und Navigation — legal, transparent und nur mit deiner Freigabe.
           </p>
           <div className="mt-8"><JarvisOrb size="large" /></div>
         </div>
         <div className="flex flex-col justify-center gap-4">
-          <p className="tiny">{mode === 'create' ? 'Erster Start' : 'Secure Login'}</p>
-          <h2 className="text-3xl font-black">{mode === 'create' ? 'Lokalen Account erstellen' : 'Einloggen'}</h2>
+          <p className="tiny">{mode === 'create' ? 'Erster Start' : 'Willkommen zurück'}</p>
+          <h2 className="text-3xl font-black">{mode === 'create' ? 'Profil erstellen' : `Willkommen zurück${state.user ? `, ${state.user.username}` : ''}`}</h2>
+          {mode === 'login' ? <div className="rounded-full border border-green-300/20 bg-white/[.04] px-4 py-3 text-sm text-green-100/70">{new Date().toLocaleString('de-DE')} · Tagesstatus bereit</div> : null}
           <input className="field" autoComplete="username" placeholder="Benutzername" value={username} onChange={(event) => setUsername(event.target.value)} />
+          {mode === 'create' ? <select className="field" value={style} onChange={(event) => setStyle(event.target.value as 'professionell' | 'futuristisch' | 'minimal')}><option>professionell</option><option>futuristisch</option><option>minimal</option></select> : <div className="mx-auto grid h-28 w-28 place-items-center rounded-full border border-green-300/30 bg-white/[.06] shadow-glow"><span className="text-2xl font-black">ID</span></div>}
           <input className="field" autoComplete={mode === 'create' ? 'new-password' : 'current-password'} type="password" placeholder="Passwort" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && submit()} />
-          <button className="touch-btn text-center" onClick={submit}>{mode === 'create' ? 'Account erstellen' : 'Login'}</button>
+          <button className="touch-btn text-center" onClick={submit}>{mode === 'create' ? 'Profil erstellen' : 'AURA starten'}</button>
           {state.user ? <button className="cyber-btn" onClick={() => setMode(mode === 'create' ? 'login' : 'create')}>{mode === 'create' ? 'Zum Login' : 'Neuen lokalen Account anlegen'}</button> : null}
           <p className="text-sm text-green-100/65">{message}</p>
         </div>
@@ -186,12 +241,12 @@ function BootScreen({ username }: { username: string }) {
     <main className="grid min-h-screen place-items-center p-6">
       <div className="text-center animate-boot">
         <JarvisOrb size="large" />
-        <p className="tiny mt-8">Boot sequence · Safe Simulation Kernel</p>
+        <p className="tiny mt-8">Cinematic Boot · AURA Core Initialisierung</p>
         <h1 className="mt-3 text-4xl font-black md:text-6xl">Willkommen, {username}</h1>
         <div className="mx-auto mt-6 h-2 w-72 overflow-hidden rounded-full bg-green-300/10">
           <div className="h-full w-2/3 animate-pulse rounded-full bg-green-300 shadow-glow" />
         </div>
-        <p className="mt-4 text-green-100/60">AURA Core · Permissions · Reminder · PWA Shell</p>
+        <p className="mt-4 text-green-100/60">Personal Intelligence Dashboard · Workstation · Life OS</p>
       </div>
     </main>
   );
@@ -210,7 +265,7 @@ function ModuleRouter({ state, setState, notify }: { state: AppState; setState: 
       ),
     }));
     if (result === 'granted') {
-      await notifier.send('AWS Hack Test', 'AURA Core Benachrichtigungen sind aktiv.');
+      await notifier.send('AWS KI Manager Test', 'AURA Core Benachrichtigungen sind aktiv.');
     }
     notify({ tone: result === 'granted' ? 'success' : 'warning', title: 'Notifications', body: result === 'granted' ? 'Test-Benachrichtigung gesendet.' : 'Ich nutze In-App-Reminder als Fallback.' });
   }, [notify, setState]);
@@ -229,10 +284,15 @@ function ModuleRouter({ state, setState, notify }: { state: AppState; setState: 
 
   switch (state.activeModule) {
     case 'setup': return <SetupWizard {...common} />;
+    case 'today': return <TodayModule {...common} />;
     case 'dashboard': return <Dashboard {...common} />;
     case 'calendar': return <CalendarModule {...common} />;
     case 'tasks': return <TasksModule {...common} />;
     case 'news': return <NewsModule />;
+    case 'wiki': return <WikiModule state={state} setState={setState} />;
+    case 'navigation': return <NavigationModule state={state} setState={setState} notify={notify} />;
+    case 'notes': return <NotesModule state={state} setState={setState} />;
+    case 'focus': return <FocusModule state={state} setState={setState} notify={notify} />;
     case 'permissions': return <PermissionCenter {...common} />;
     case 'terminal': return <TerminalModule state={state} setState={setState} notify={notify} />;
     case 'files': return <FilesModule notify={notify} />;
@@ -254,58 +314,100 @@ type ModuleProps = {
 
 function AssistantModule({ state, setState, requestNotifications, openModule, addEvent, addTask }: ModuleProps) {
   const [input, setInput] = useState('');
+  const [thinking, setThinking] = useState(false);
 
-  function send(text = input) {
-    if (!text.trim()) return;
-    const parsed = parseUserCommand(text);
-    const result = executeCommand(parsed, {
-      events: state.events,
-      tasks: state.tasks,
-      permissions: state.permissions,
-      open: openModule,
-      addEvent,
-      addTask,
-      requestNotifications,
-    });
-
-    setState((current) => ({
-      ...current,
-      messages: [
-        ...current.messages,
-        { id: createId(), role: 'user', content: text, time: new Date().toISOString() },
-        { id: createId(), role: 'assistant', content: returnAssistantResponse(result), time: new Date().toISOString(), suggestions: exampleCommands.slice(0, 3) },
-      ],
-    }));
+  async function send(text = input) {
+    if (!text.trim() || thinking) return;
+    const needsLiveContext = /(heute.*passiert|nachrichten|news|deutschland|formel|f1|wetter|tankstelle|apotheke|supermarkt|parkplatz|navigation|route|geldautomat|wikipedia|wiki|wissen|fokus|notiz)/i.test(text);
     setInput('');
+    setThinking(true);
+
+    const userMessage = { id: createId(), role: 'user' as const, content: text, time: new Date().toISOString() };
+    setState((current) => ({ ...current, messages: [...current.messages, userMessage] }));
+
+    try {
+      const parsed = parseUserCommand(text);
+      const localResult = executeCommand(parsed, {
+        events: state.events,
+        tasks: state.tasks,
+        permissions: state.permissions,
+        open: openModule,
+        addEvent,
+        addTask,
+        requestNotifications,
+      });
+
+      let content = returnAssistantResponse(localResult);
+      let suggestions = exampleCommands.slice(0, 3);
+
+      if (needsLiveContext || parsed.intent === 'unknown') {
+        const response = await fetch('/api/assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            context: {
+              events: state.events.slice(0, 8),
+              tasks: state.tasks.slice(0, 8),
+              permissions: state.permissions,
+              locationAvailable: Boolean(state.runtime?.location),
+            },
+          }),
+        });
+        if (response.ok) {
+          const data = (await response.json()) as { answer?: string; suggestions?: string[]; status?: SourceStatus; note?: string };
+          content = data.answer ?? content;
+          suggestions = data.suggestions ?? suggestions;
+          if (/(navigation|route|tankstelle|apotheke|supermarkt|parkplatz|geldautomat)/i.test(text)) openModule('navigation');
+          if (/(news|nachrichten|passiert|deutschland|formel|f1)/i.test(text)) openModule('news');
+          if (/(wikipedia|wiki|wissen)/i.test(text)) openModule('wiki');
+          if (/(fokus)/i.test(text)) openModule('focus');
+        }
+      }
+
+      setState((current) => ({
+        ...current,
+        messages: [...current.messages, { id: createId(), role: 'assistant', content, time: new Date().toISOString(), suggestions }],
+      }));
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        messages: [...current.messages, { id: createId(), role: 'assistant', content: `AURA Core: ${error instanceof Error ? error.message : 'Ich konnte die Anfrage nicht verarbeiten.'}`, time: new Date().toISOString() }],
+      }));
+    } finally {
+      setThinking(false);
+    }
   }
 
   return (
     <section className="grid gap-4 lg:grid-cols-[1fr_22rem]">
-      <div className="window flex min-h-[72vh] flex-col">
+      <div className="window flex min-h-[72vh] flex-col liquid-focus">
         <div className="flex items-center gap-4">
           <JarvisOrb />
           <div>
             <p className="tiny">Main Interface</p>
             <h2 className="text-3xl font-black">AURA Core</h2>
-            <p className="text-sm text-green-100/60">Natürliche deutsche Befehle · lokale Demo-Aktionen · sichere Rückfragen</p>
+            <p className="text-sm text-green-100/60">Live-fähige deutsche Assistenz · App-Aktionen · News/Wetter/Navigation über sichere Provider</p>
           </div>
         </div>
-        <div className="no-scrollbar mt-4 flex-1 space-y-3 overflow-auto rounded-3xl border border-green-300/10 bg-black/25 p-3">
+        <div className="no-scrollbar mt-4 flex-1 space-y-3 overflow-auto rounded-3xl border border-white/10 bg-black/20 p-3 backdrop-blur-2xl">
           {state.messages.map((message) => (
             <div key={message.id} className={`max-w-[92%] rounded-3xl p-4 ${message.role === 'assistant' ? 'bg-green-300/10' : 'ml-auto bg-cyan-300/10'}`}>
               <p>{message.content}</p>
-              {message.suggestions?.length ? <div className="mt-3 flex flex-wrap gap-2">{message.suggestions.map((suggestion) => <button className="rounded-full border border-green-300/20 px-3 py-2 text-xs text-green-100/70" key={suggestion} onClick={() => send(suggestion)}>{suggestion}</button>)}</div> : null}
+              {message.suggestions?.length ? <div className="mt-3 flex flex-wrap gap-2">{message.suggestions.map((suggestion) => <button className="rounded-full border border-green-300/20 px-3 py-2 text-xs text-green-100/70" key={suggestion} onClick={() => void send(suggestion)}>{suggestion}</button>)}</div> : null}
             </div>
           ))}
+          {thinking ? <div className="max-w-[92%] rounded-3xl bg-green-300/10 p-4 text-green-100/70">AURA analysiert Live-/lokale Provider…</div> : null}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-          <input className="field" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && send()} placeholder="z.B. Erstelle morgen um 8 Uhr einen Termin Schule" />
-          <button className="touch-btn text-center" onClick={() => send()}>Senden</button>
-          <button className="touch-btn text-center" title="Mikrofon vorbereitet" onClick={() => openModule('permissions')}>🎙</button>
+          <input className="field" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void send()} placeholder="z.B. Was ist heute in Deutschland passiert?" />
+          <button className="touch-btn text-center" onClick={() => void send()}>{thinking ? '…' : 'Senden'}</button>
+          <button className="touch-btn text-center" title="Mikrofon vorbereiten" onClick={() => openModule('permissions')}>🎙</button>
         </div>
       </div>
       <div className="grid gap-4">
         <QuickCards state={state} openModule={openModule} />
+        <WeatherCard state={state} />
         <ReminderPanel state={state} />
       </div>
     </section>
@@ -319,7 +421,7 @@ function SetupWizard({ state, setState, requestNotifications, notify, openModule
   async function next() {
     if (current === 'Benachrichtigungen') await requestNotifications();
     if (current === 'Fertig') {
-      setState((stored) => ({ ...stored, user: stored.user ? { ...stored.user, setupCompleted: true } : stored.user, activeModule: 'assistant' }));
+      setState((stored) => ({ ...stored, user: stored.user ? { ...stored.user, setupCompleted: true } : stored.user, activeModule: 'today' }));
       notify({ tone: 'success', title: 'Setup abgeschlossen', body: 'AURA Core ist jetzt dein Hauptscreen.' });
       return;
     }
@@ -328,19 +430,19 @@ function SetupWizard({ state, setState, requestNotifications, notify, openModule
 
   return (
     <section className="window mx-auto max-w-4xl">
-      <p className="tiny">AWS Hack einrichten</p>
+      <p className="tiny">AWS KI Manager einrichten</p>
       <h2 className="mt-2 text-4xl font-black">{current}</h2>
       <div className="mt-6 grid grid-cols-4 gap-2 md:grid-cols-8">
         {setupSteps.map((label, index) => <div key={label} className={`h-2 rounded-full ${index <= step ? 'bg-green-300 shadow-glow' : 'bg-green-300/10'}`} />)}
       </div>
       <div className="mt-8 rounded-3xl border border-green-300/15 bg-black/30 p-5 text-green-100/80">
         {current === 'Konto' && <p>Dein lokaler Demo-Account ist erstellt. Für Produktion wäre Backend-Auth mit sicheren Sessions nötig.</p>}
-        {current === 'Benachrichtigungen' && <p>Aktiviere Browser-Benachrichtigungen für Termin-Reminder. Wenn du ablehnst, nutzt AWS Hack In-App-Hinweise.</p>}
+        {current === 'Benachrichtigungen' && <p>Aktiviere Browser-Benachrichtigungen für Termin-Reminder. Wenn du ablehnst, nutzt AWS KI Manager In-App-Hinweise.</p>}
         {current === 'Kalender' && <p>Der lokale Demo-Kalender ist aktiv. Google Calendar und Microsoft Graph sind als Provider vorbereitet, brauchen später OAuth.</p>}
         {current === 'News' && <p>Demo-News sind aktiv. Ein echter NewsApiProvider ist vorbereitet, API-Keys gehören serverseitig geschützt.</p>}
         {current === 'Dateien' && <p>Dateien werden ausschließlich über deinen aktiven File-Picker-Klick geöffnet. Keine heimliche Dateiüberwachung.</p>}
         {current === 'Mikrofon' && <p>Der Sprachbutton ist vorbereitet. Echtes Mikrofon wird erst nach Klick und OS-Dialog verwendet.</p>}
-        {current === 'PWA' && <p>Installiere AWS Hack über das Browser-Menü als PWA auf Handy oder PC. Die App bleibt responsive und offline-vorbereitet.</p>}
+        {current === 'PWA' && <p>Installiere AWS KI Manager über das Browser-Menü als PWA auf Handy oder PC. Die App bleibt responsive und offline-vorbereitet.</p>}
         {current === 'Fertig' && <p>Setup abgeschlossen. Das Dashboard öffnet AURA Core als mobile Hauptansicht.</p>}
       </div>
       <div className="mt-6 flex flex-wrap gap-3">
@@ -351,17 +453,46 @@ function SetupWizard({ state, setState, requestNotifications, notify, openModule
   );
 }
 
+
+function TodayModule({ state, openModule, requestNotifications }: ModuleProps) {
+  const nextEvent = upcomingEvents(state.events)[0];
+  const openTasks = state.tasks.filter((task) => task.status !== 'erledigt');
+  const nextReminder = state.reminders.filter((reminder) => !reminder.delivered).sort((a, b) => a.dueAt.localeCompare(b.dueAt))[0];
+  return (
+    <section className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
+      <div className="window liquid-focus">
+        <p className="tiny">Heute · Personal Intelligence</p>
+        <h2 className="mt-2 text-4xl font-black">Willkommen zurück, {state.user?.username}</h2>
+        <p className="mt-2 text-green-100/65">{new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' })} · {new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</p>
+        <div className="my-6"><JarvisOrb size="large" /></div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <article className="card"><p className="tiny">AURA Briefing</p><p className="mt-3 text-lg font-semibold">Du hast {openTasks.length} offene Aufgaben{nextEvent ? `, dein nächster Termin ist ${nextEvent.title} um ${nextEvent.time}` : ''}. Starte mit der wichtigsten Sache und halte 25 Minuten Fokus.</p></article>
+          <article className="card"><p className="tiny">Nächste Erinnerung</p><p className="mt-3 text-lg font-semibold">{nextReminder ? `${nextReminder.title} · ${new Date(nextReminder.dueAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : 'Keine offene Erinnerung'}</p></article>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[["AURA", 'assistant'], ["Wetter", 'dashboard'], ["News", 'news'], ["Route", 'navigation'], ["Aufgabe", 'tasks'], ["Datei", 'files'], ["Wissen", 'wiki'], ["Fokus", 'focus']].map(([label, module]) => <button key={label} className="touch-btn" onClick={() => openModule(module as ModuleId)}>{label}</button>)}
+        </div>
+      </div>
+      <div className="grid gap-4">
+        <WeatherCard state={state} />
+        <QuickCards state={state} openModule={openModule} />
+        <button className="touch-btn" onClick={requestNotifications}>Benachrichtigung testen</button>
+      </div>
+    </section>
+  );
+}
+
 function Dashboard({ state, openModule, requestNotifications }: ModuleProps) {
   return (
     <section className="grid gap-4 lg:grid-cols-[1.05fr_.95fr]">
       <div className="window">
-        <p className="tiny">Cyber OS Dashboard</p>
-        <h2 className="mt-2 text-4xl font-black">Willkommen, {state.user?.username}</h2>
-        <p className="mt-2 text-green-100/65">AURA Core ist als mobiler Hauptscreen optimiert. Desktop zeigt OS-Fenster, Status und Schnellaktionen.</p>
+        <p className="tiny">Personal Intelligence Dashboard</p>
+        <h2 className="mt-2 text-4xl font-black">Personal Intelligence Dashboard</h2>
+        <p className="mt-2 text-green-100/65">Ein cleanes Premium-Dashboard für Alltag, Arbeit, Schule, Wissen, Wetter, News und Navigation.</p>
         <div className="my-6"><JarvisOrb size="large" /></div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {[
-            ['KI fragen', 'assistant'], ['Kalender öffnen', 'calendar'], ['Termin erstellen', 'calendar'], ['Aufgabe erstellen', 'tasks'], ['News zusammenfassen', 'news'], ['Berechtigungen', 'permissions'], ['Terminal öffnen', 'terminal'], ['Systemstatus', 'system'], ['Setup', 'setup'],
+            ['Heute öffnen', 'today'], ['KI fragen', 'assistant'], ['Kalender öffnen', 'calendar'], ['Termin erstellen', 'calendar'], ['Aufgabe erstellen', 'tasks'], ['Live-News', 'news'], ['Wissen suchen', 'wiki'], ['Navigation', 'navigation'], ['Fokusmodus', 'focus'], ['Notizen', 'notes'], ['Berechtigungen', 'permissions'], ['Terminal öffnen', 'terminal'], ['Systemstatus', 'system'], ['Setup', 'setup'],
           ].map(([label, module]) => <button key={label} className="touch-btn" onClick={() => openModule(module as ModuleId)}>{label}</button>)}
         </div>
       </div>
@@ -388,6 +519,28 @@ function QuickCards({ state, openModule }: { state: AppState; openModule: (modul
         <p className="tiny">Aufgaben</p>
         {openTasks.map((task) => <p key={task.id} className="mt-2 font-semibold">{task.title} · {task.priority}</p>)}
       </button>
+      <button className="card text-left" onClick={() => openModule('navigation')}>
+        <p className="tiny">Navigation</p>
+        <p className="mt-2 font-semibold">Tankstelle · Apotheke · Maps-Links</p>
+      </button>
+    </div>
+  );
+}
+
+function WeatherCard({ state }: { state: AppState }) {
+  const [weather, setWeather] = useState(state.runtime?.weather);
+
+  async function loadWeather() {
+    const input = state.runtime?.location ? { latitude: state.runtime.location.latitude, longitude: state.runtime.location.longitude } : { city: 'Berlin' };
+    const result = await weatherProvider.current(input);
+    setWeather(result);
+  }
+
+  return (
+    <div className="window">
+      <div className="flex items-center justify-between gap-3"><div><p className="tiny">Weather Core</p><h3 className="mt-1 text-xl font-black">Wetter</h3></div><StatusBadge status={weather?.source ?? 'api-missing'} /></div>
+      <p className="mt-3 text-green-100/70">{weather ? `${weather.location}: ${weather.temperatureC}°C, ${weather.condition}` : 'Live-Wetter via /api/weather oder Fallback.'}</p>
+      <button className="cyber-btn mt-4" onClick={() => void loadWeather()}>Wetter laden</button>
     </div>
   );
 }
@@ -475,40 +628,210 @@ function TasksModule({ state, setState, notify }: ModuleProps) {
 function NewsModule() {
   const [category, setCategory] = useState('Alle');
   const [query, setQuery] = useState('');
-  const filtered = demoNews.filter((item) => (category === 'Alle' || item.category === category) && `${item.title} ${item.summary}`.toLowerCase().includes(query.toLowerCase()));
+  const [items, setItems] = useState(demoNews);
+  const [summary, setSummary] = useState(summarizeNews(demoNews));
+  const [message, setMessage] = useState('Live-News werden über /api/news geladen, falls NEWS_API_KEY gesetzt ist.');
+  const [status, setStatus] = useState<SourceStatus>('demo');
+  const [loading, setLoading] = useState(false);
+
+  const loadNews = useCallback(async (nextCategory = category, nextQuery = query) => {
+    setLoading(true);
+    try {
+      const response = await liveNews.list({ category: nextCategory, query: nextQuery, dateHint: detectDateHint(nextQuery) });
+      setItems(response.items);
+      setSummary(response.summary);
+      setMessage(response.message);
+      setStatus(response.status);
+    } catch (error) {
+      setItems(demoNews);
+      setSummary(summarizeNews(demoNews));
+      setMessage(error instanceof Error ? error.message : 'News-Fallback aktiv.');
+      setStatus('api-missing');
+    } finally {
+      setLoading(false);
+    }
+  }, [category, query]);
+
+  useEffect(() => { void loadNews('Alle', ''); }, [loadNews]);
 
   return (
     <section className="window">
-      <p className="tiny">News Feed</p><h2 className="text-3xl font-black">Nachrichten</h2>
-      <div className="mt-5 grid gap-3 md:grid-cols-[auto_1fr]"><select className="field" value={category} onChange={(event) => setCategory(event.target.value)}>{newsCategories.map((item) => <option key={item}>{item}</option>)}</select><input className="field" placeholder="News suchen" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
-      <div className="my-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-cyan-50">{summarizeNews(filtered)}</div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{filtered.map((item) => <article className="card" key={item.id}><p className="tiny">{item.category}</p><h3 className="mt-2 text-xl font-black">{item.title}</h3><p className="mt-2 text-green-100/65">{item.summary}</p><p className="mt-3 text-xs text-green-100/45">{item.source}</p></article>)}</div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><p className="tiny">News Feed</p><h2 className="text-3xl font-black">Aktuelle Nachrichten</h2></div>
+        <StatusBadge status={status} />
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-[auto_1fr_auto]">
+        <select className="field" value={category} onChange={(event) => { setCategory(event.target.value); void loadNews(event.target.value, query); }}>{newsCategories.map((item) => <option key={item}>{item}</option>)}</select>
+        <input className="field" placeholder="Was ist heute passiert? Formel 1, Deutschland, Sicherheit…" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void loadNews()} />
+        <button className="touch-btn text-center" onClick={() => void loadNews()}>{loading ? 'Lädt…' : 'Live suchen'}</button>
+      </div>
+      <div className="my-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-cyan-50"><p>{summary}</p><p className="mt-2 text-xs text-cyan-50/60">{message}</p></div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{items.map((item) => <article className="card" key={item.id}><div className="flex items-center justify-between gap-3"><p className="tiny">{item.category}</p><StatusBadge status={item.status ?? status} /></div><h3 className="mt-2 text-xl font-black">{item.title}</h3><p className="mt-2 text-green-100/65">{item.summary}</p><p className="mt-3 text-xs text-green-100/45">{item.source} · {new Date(item.publishedAt).toLocaleString('de-DE')}</p>{item.url ? <a className="cyber-btn mt-4 inline-block" href={item.url} target="_blank" rel="noreferrer">Quelle öffnen</a> : null}</article>)}</div>
     </section>
   );
 }
 
-function PermissionCenter({ state, setState, requestNotifications }: ModuleProps) {
+function PermissionCenter({ state, setState, requestNotifications, notify }: ModuleProps) {
+  const [micStream, setMicStream] = useState<MediaStream | null>(null);
+
   function updatePermission(id: string, status: AppState['permissions'][number]['status']) {
     setState((current) => ({ ...current, permissions: current.permissions.map((permission) => permission.id === id ? { ...permission, status } : permission) }));
   }
 
+  async function requestLocation() {
+    try {
+      const location = await locationProvider.current();
+      setState((current) => ({ ...current, runtime: { ...current.runtime, location }, permissions: current.permissions.map((permission) => permission.id === 'location' ? { ...permission, status: 'granted' } : permission) }));
+      notify({ tone: 'success', title: 'Standort aktiv', body: 'Standort wurde einmalig für Wetter und Navigation abgerufen.' });
+    } catch {
+      updatePermission('location', 'denied');
+      notify({ tone: 'warning', title: 'Standort nicht verfügbar', body: 'Du kannst Navigation weiter mit Demo-Orten oder manueller Adresse nutzen.' });
+    }
+  }
+
+  async function requestMicrophone() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      updatePermission('microphone', 'denied');
+      notify({ tone: 'warning', title: 'Mikrofon nicht unterstützt', body: 'Dieser Browser bietet keine MediaDevices API.' });
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicStream(stream);
+      setState((current) => ({ ...current, runtime: { ...current.runtime, microphoneActive: true }, permissions: current.permissions.map((permission) => permission.id === 'microphone' ? { ...permission, status: 'granted' } : permission) }));
+      notify({ tone: 'success', title: 'Mikrofon aktiv', body: 'Audiozugriff läuft sichtbar. Du kannst ihn sofort stoppen.' });
+    } catch {
+      updatePermission('microphone', 'denied');
+    }
+  }
+
+  function stopMicrophone() {
+    micStream?.getTracks().forEach((track) => track.stop());
+    setMicStream(null);
+    setState((current) => ({ ...current, runtime: { ...current.runtime, microphoneActive: false } }));
+  }
+
+  function prepareSpeech() {
+    const w = window as Window & { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+    const supported = Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
+    setState((current) => ({ ...current, runtime: { ...current.runtime, speechSupported: supported }, permissions: current.permissions.map((permission) => permission.id === 'speech' ? { ...permission, status: supported ? 'requested' : 'denied' } : permission) }));
+    notify({ tone: supported ? 'success' : 'warning', title: 'Speech API', body: supported ? 'Web Speech API ist vorbereitet; Aufnahme startet erst per explizitem Klick.' : 'Dieser Browser unterstützt Web Speech API nicht.' });
+  }
+
+  async function requestPermission(permissionId: string) {
+    if (permissionId === 'notifications') { await requestNotifications(); return; }
+    if (permissionId === 'location') { await requestLocation(); return; }
+    if (permissionId === 'microphone') { await requestMicrophone(); return; }
+    if (permissionId === 'speech') { prepareSpeech(); return; }
+    updatePermission(permissionId, 'requested');
+  }
+
   async function setupRecommended() {
     for (const permission of state.permissions.filter((item) => item.recommended)) {
-      if (permission.id === 'notifications') await requestNotifications();
-      else updatePermission(permission.id, 'requested');
+      await requestPermission(permission.id);
     }
   }
 
   return (
     <section className="window">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="tiny">Transparent Permission Layer</p><h2 className="text-3xl font-black">Permission Center</h2></div><button className="touch-btn" onClick={setupRecommended}>Alle empfohlenen einrichten</button></div>
-      <div className="mt-6 grid gap-3 md:grid-cols-2">{state.permissions.map((permission) => <article key={permission.id} className="card"><div className="flex items-center justify-between gap-3"><h3 className="text-xl font-black">{permission.name}</h3><span className="rounded-full border border-green-300/20 px-3 py-1 text-xs">{permission.status}</span></div><p className="mt-2 text-green-100/70">{permission.description}</p><p className="mt-2 text-sm text-green-100/45">{permission.technical}</p><div className="mt-4 flex flex-wrap gap-2"><button className="cyber-btn" onClick={() => permission.id === 'notifications' ? requestNotifications() : updatePermission(permission.id, 'requested')}>Freigeben</button><button className="cyber-btn" onClick={() => updatePermission(permission.id, 'demo')}>Demo</button><button className="cyber-btn" onClick={() => updatePermission(permission.id, 'disconnected')}>Trennen</button></div></article>)}</div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="tiny">Transparent Permission Layer</p><h2 className="text-3xl font-black">Permission Center</h2></div><button className="touch-btn" onClick={() => void setupRecommended()}>Empfohlene einzeln einrichten</button></div>
+      {state.runtime?.microphoneActive ? <div className="mt-4 rounded-3xl border border-red-300/30 bg-red-400/10 p-4"><b>Mikrofon aktiv</b><p className="text-sm text-green-100/65">Audiozugriff läuft nur nach deinem Klick.</p><button className="cyber-btn mt-3" onClick={stopMicrophone}>Mikrofon stoppen</button></div> : null}
+      <div className="mt-6 grid gap-3 md:grid-cols-2">{state.permissions.map((permission) => { const badge: SourceStatus = permission.status === 'granted' ? 'live' : permission.status === 'denied' ? 'permission-missing' : permission.status === 'demo' ? 'demo' : 'api-missing'; return <article key={permission.id} className="card"><div className="flex items-center justify-between gap-3"><h3 className="text-xl font-black">{permission.name}</h3><StatusBadge status={badge} /></div><p className="mt-2 text-green-100/70">{permission.description}</p><p className="mt-2 text-sm text-green-100/45">{permission.technical}</p><div className="mt-4 flex flex-wrap gap-2"><button className="cyber-btn" onClick={() => void requestPermission(permission.id)}>Freigeben</button><button className="cyber-btn" onClick={() => updatePermission(permission.id, 'demo')}>Fallback nutzen</button><button className="cyber-btn" onClick={() => updatePermission(permission.id, 'disconnected')}>Trennen</button></div></article>; })}</div>
     </section>
   );
 }
 
+function NavigationModule({ state, setState, notify }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void; notify: (message: Omit<ToastMessage, 'id'>) => void }) {
+  const [query, setQuery] = useState('Tankstelle');
+  const [category, setCategory] = useState<PlaceCategory>('fuel');
+  const [results, setResults] = useState<PlaceResult[]>([]);
+
+  const search = useCallback(async (nextCategory = category, nextQuery = query) => {
+    const places = await placesProvider.search({ category: nextCategory, query: nextQuery, origin: state.runtime?.location });
+    setResults(places);
+    if (nextCategory === 'fuel') {
+      const best = bestFuelRecommendation(places);
+      notify({ tone: 'info', title: 'Tankstellen-Fallback', body: best ? `${best.name}: Demo-Preis ${best.fuelPriceEur?.toFixed(2)} €/L. Für echte Spritpreise FuelPrice API verbinden.` : 'Keine Tankstelle gefunden.' });
+    }
+  }, [category, notify, query, state.runtime?.location]);
+
+  async function useLocation() {
+    try {
+      const location = await locationProvider.current();
+      setState((current) => ({ ...current, runtime: { ...current.runtime, location }, permissions: current.permissions.map((permission) => permission.id === 'location' ? { ...permission, status: 'granted' } : permission) }));
+      notify({ tone: 'success', title: 'Standort gesetzt', body: 'Suche nutzt jetzt deine freigegebene Browser-Position.' });
+    } catch {
+      notify({ tone: 'warning', title: 'Standort fehlt', body: 'Ich nutze Demo-Entfernungen. Keine Hintergrund-Ortung.' });
+    }
+  }
+
+  useEffect(() => { void search('fuel', 'Tankstelle'); }, [search]);
+
+  return (
+    <section className="window">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="tiny">Location Core</p><h2 className="text-3xl font-black">Navigation & Orte</h2></div><StatusBadge status={state.runtime?.location ? 'live' : 'permission-missing'} /></div>
+      <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto_auto]">
+        <input className="field" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void search()} placeholder="Wohin? z.B. billigste Tankstelle, Apotheke, McDonald’s" />
+        <button className="touch-btn text-center" onClick={() => void search()}>Suchen</button>
+        <button className="touch-btn text-center" onClick={() => void useLocation()}>Standort nutzen</button>
+      </div>
+      <div className="mt-4 flex gap-2 overflow-x-auto pb-2">{navigationCategories.map((item) => <button key={item.id} className={`cyber-btn whitespace-nowrap ${category === item.id ? 'border-green-300/70 bg-green-300/20' : ''}`} onClick={() => { setCategory(item.id); setQuery(item.label); void search(item.id, item.label); }}>{item.label}</button>)}</div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{results.map((place) => <article className="card" key={place.id}><div className="flex items-center justify-between gap-3"><p className="tiny">{place.category}</p><StatusBadge status={place.source} /></div><h3 className="mt-2 text-xl font-black">{place.name}</h3><p className="text-green-100/65">{place.distanceKm.toFixed(1)} km · ca. {place.travelMinutes} Min · {place.openNow ? 'offen' : 'geschlossen'}</p>{place.fuelPriceEur ? <p className="mt-2 text-sm text-yellow-100/80">Demo-Preis: {place.fuelPriceEur.toFixed(2)} €/L · echte Preise benötigen FUEL_API_KEY</p> : null}<div className="mt-4 flex flex-wrap gap-2"><a className="cyber-btn" href={mapsProvider.openInGoogleMaps(place)} target="_blank" rel="noreferrer">Google Maps</a><a className="cyber-btn" href={mapsProvider.openInAppleMaps(place)} target="_blank" rel="noreferrer">Apple Karten</a><a className="cyber-btn" href={mapsProvider.openInOpenStreetMap(place)} target="_blank" rel="noreferrer">OpenStreetMap</a></div></article>)}</div>
+    </section>
+  );
+}
+
+
+function WikiModule({ state, setState }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void }) {
+  const [query, setQuery] = useState('Künstliche Intelligenz');
+  const [result, setResult] = useState<WikiSummary | undefined>(state.runtime?.wiki);
+  const [loading, setLoading] = useState(false);
+
+  async function search() {
+    if (!query.trim()) return;
+    setLoading(true);
+    const response = await fetch(`/api/wiki?q=${encodeURIComponent(query.trim())}`);
+    const data = (await response.json()) as WikiSummary;
+    setResult(data);
+    setState((current) => ({ ...current, runtime: { ...current.runtime, wiki: data } }));
+    setLoading(false);
+  }
+
+  return <section className="window"><div className="flex items-start justify-between gap-4"><div><p className="tiny">Knowledge Core</p><h2 className="text-3xl font-black">Wissenssuche</h2></div><StatusBadge status={result?.source ?? 'local'} /></div><div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto]"><input className="field" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void search()} placeholder="Wikipedia durchsuchen" /><button className="touch-btn" onClick={() => void search()}>{loading ? 'Suche…' : 'Suchen'}</button></div>{result ? <article className="card mt-5"><h3 className="text-2xl font-black">{result.title}</h3><p className="mt-3 text-green-100/70">{result.extract}</p><a className="cyber-btn mt-4 inline-block" href={result.url} target="_blank" rel="noreferrer">Quelle öffnen</a></article> : <p className="mt-5 text-green-100/60">Kostenlose Live-Suche über Wikipedia/Wikimedia.</p>}</section>;
+}
+
+function NotesModule({ state, setState }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void }) {
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const notes = state.notes ?? [];
+  function createNote() {
+    if (!title.trim() && !content.trim()) return;
+    const now = new Date().toISOString();
+    const note: NoteItem = { id: createId(), title: title.trim() || 'Notiz', content: content.trim(), createdAt: now, updatedAt: now };
+    setState((current) => ({ ...current, notes: [note, ...(current.notes ?? [])] }));
+    setTitle(''); setContent('');
+  }
+  const summary = notes.slice(0, 3).map((note) => note.title).join(' · ') || 'Noch keine Notizen.';
+  return <section className="window"><p className="tiny">Local Notes</p><h2 className="text-3xl font-black">Notizen</h2><p className="mt-2 text-green-100/60">AURA Kurzüberblick: {summary}</p><div className="mt-5 grid gap-3"><input className="field" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Titel" /><textarea className="field min-h-32" value={content} onChange={(event) => setContent(event.target.value)} placeholder="Notiz lokal speichern…" /><button className="touch-btn" onClick={createNote}>Notiz speichern</button></div><div className="mt-5 grid gap-3 md:grid-cols-2">{notes.map((note) => <article className="card" key={note.id}><h3 className="text-xl font-black">{note.title}</h3><p className="mt-2 whitespace-pre-wrap text-green-100/70">{note.content}</p><button className="cyber-btn mt-4" onClick={() => setState((current) => ({ ...current, notes: (current.notes ?? []).filter((item) => item.id !== note.id) }))}>Löschen</button></article>)}</div></section>;
+}
+
+function FocusModule({ state, setState, notify }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void; notify: (message: Omit<ToastMessage, 'id'>) => void }) {
+  const focus = state.focus ?? { minutes: 25, active: false };
+  const [minutes, setMinutes] = useState(focus.minutes);
+  const [taskId, setTaskId] = useState(focus.taskId ?? '');
+  const remaining = focus.endsAt ? Math.max(0, Math.ceil((new Date(focus.endsAt).getTime() - Date.now()) / 60000)) : minutes;
+  function start() {
+    const startedAt = new Date();
+    const endsAt = new Date(startedAt.getTime() + minutes * 60000);
+    setState((current) => ({ ...current, focus: { taskId: taskId || undefined, minutes, startedAt: startedAt.toISOString(), endsAt: endsAt.toISOString(), active: true } }));
+    notify({ tone: 'success', title: 'Fokusmodus gestartet', body: `AURA hält ${minutes} Minuten ruhigen Fokus.` });
+  }
+  function stop() { setState((current) => ({ ...current, focus: { minutes, taskId: undefined, active: false } })); }
+  return <section className="window liquid-focus"><p className="tiny">Focus Mode</p><h2 className="text-3xl font-black">Fokusmodus</h2><div className="my-8 text-center"><div className="mx-auto grid h-52 w-52 place-items-center rounded-full border border-green-300/30 bg-white/[.05] shadow-glow"><div><p className="text-5xl font-black">{remaining}</p><p className="tiny mt-2">Minuten</p></div></div><p className="mt-5 text-green-100/70">AURA: Eine Aufgabe, ein Zeitfenster, keine Ablenkung.</p></div><div className="grid gap-3 md:grid-cols-[auto_1fr_auto_auto]"><input className="field" type="number" min={5} max={120} value={minutes} onChange={(event) => setMinutes(Number(event.target.value))} /><select className="field" value={taskId} onChange={(event) => setTaskId(event.target.value)}><option value="">Freier Fokus</option>{state.tasks.filter((task) => task.status !== 'erledigt').map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select><button className="touch-btn" onClick={start}>Start</button><button className="cyber-btn" onClick={stop}>Stop</button></div></section>;
+}
+
 function TerminalModule({ state, notify }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void; notify: (message: Omit<ToastMessage, 'id'>) => void }) {
-  const [lines, setLines] = useState<string[]>(['AWS Hack Terminal — legal simulation only.', '> help', 'help, status, calendar, tasks, news, permissions, clear, aura, scan-local']);
+  const [lines, setLines] = useState<string[]>(['AWS KI Manager Terminal — legal simulation only.', '> help', 'help, status, calendar, tasks, news, permissions, clear, aura, scan-local']);
   const [command, setCommand] = useState('');
 
   function run() {
@@ -527,7 +850,7 @@ function TerminalModule({ state, notify }: { state: AppState; setState: (next: A
       : cmd === 'scan-local' ? 'Simulierter Selbstcheck: LocalStorage ok, PWA Shell ok, keine Netzwerkziele gescannt.'
       : cmd === 'help' ? 'help, status, calendar, tasks, news, permissions, clear, aura, scan-local'
       : 'Unbekannter Demo-Befehl. Gefährliche Befehle bleiben blockiert.';
-    if (blocked) notify({ tone: 'warning', title: 'Terminal blockiert', body: 'AWS Hack bleibt eine legale Simulation.' });
+    if (blocked) notify({ tone: 'warning', title: 'Terminal blockiert', body: 'AWS KI Manager bleibt eine legale Simulation.' });
     setLines((current) => [...current, `> ${command}`, output]);
     setCommand('');
   }
@@ -549,7 +872,7 @@ function FilesModule({ notify }: { notify: (message: Omit<ToastMessage, 'id'>) =
     setFilePreview(`${file.name} ausgewählt. Vorschau nur für Textdateien im Demo-Modus.`);
   }
 
-  return <section className="window"><p className="tiny">File Consent Zone</p><h2 className="text-3xl font-black">Dateien</h2><p className="mt-3 text-green-100/70">AWS Hack öffnet echte Dateien nur über deinen aktiven Klick. Keine Überwachung, kein automatischer Systemzugriff.</p><input className="mt-5 block w-full rounded-3xl border border-green-300/20 bg-green-300/10 p-5" type="file" onChange={(event) => handleFile(event.currentTarget.files?.[0])} /><pre className="mt-5 max-h-80 overflow-auto whitespace-pre-wrap rounded-3xl bg-black/50 p-4 text-sm text-green-100/70">{filePreview}</pre></section>;
+  return <section className="window"><p className="tiny">File Consent Zone</p><h2 className="text-3xl font-black">Dateien</h2><p className="mt-3 text-green-100/70">AWS KI Manager öffnet echte Dateien nur über deinen aktiven Klick. Keine Überwachung, kein automatischer Systemzugriff.</p><input className="mt-5 block w-full rounded-3xl border border-green-300/20 bg-green-300/10 p-5" type="file" onChange={(event) => handleFile(event.currentTarget.files?.[0])} /><pre className="mt-5 max-h-80 overflow-auto whitespace-pre-wrap rounded-3xl bg-black/50 p-4 text-sm text-green-100/70">{filePreview}</pre></section>;
 }
 
 function SystemModule({ state }: { state: AppState }) {
@@ -561,11 +884,11 @@ function SystemModule({ state }: { state: AppState }) {
 }
 
 function TopBar({ state, setState }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void }) {
-  return <header className="window mb-4 flex items-center justify-between gap-3"><div><p className="tiny">AWS Hack OS</p><p className="font-semibold">{new Date().toLocaleString('de-DE')}</p></div><button className="cyber-btn" onClick={() => setState((current) => ({ ...current, session: false }))}>Logout · {state.user?.initials}</button></header>;
+  return <header className="window mb-4 flex items-center justify-between gap-3"><div><p className="tiny">AWS KI Manager OS</p><p className="font-semibold">{new Date().toLocaleString('de-DE')}</p></div><button className="cyber-btn" onClick={() => setState((current) => ({ ...current, session: false }))}>Logout · {state.user?.initials}</button></header>;
 }
 
 function DesktopSidebar({ state, setState }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void }) {
-  return <aside className="window sticky top-5 hidden h-[calc(100vh-2.5rem)] w-72 shrink-0 overflow-auto md:block"><p className="tiny">AWS Hack</p><h1 className="mt-2 text-3xl font-black">Cyber OS</h1><div className="my-6"><JarvisOrb /></div><nav className="grid gap-2">{navItems.map((item) => <button key={item.id} className={`touch-btn ${state.activeModule === item.id ? 'border-green-300/70 bg-green-300/20 shadow-glow' : ''}`} onClick={() => setState((current) => ({ ...current, activeModule: item.id }))}><span className="mr-2">{item.icon}</span>{item.label}</button>)}</nav></aside>;
+  return <aside className="window sticky top-5 hidden h-[calc(100vh-2.5rem)] w-72 shrink-0 overflow-auto md:block"><p className="tiny">AWS KI Manager</p><h1 className="mt-2 text-3xl font-black">Personal Intelligence Dashboard</h1><div className="my-6"><JarvisOrb /></div><nav className="grid gap-2">{navItems.map((item) => <button key={item.id} className={`touch-btn ${state.activeModule === item.id ? 'border-green-300/70 bg-green-300/20 shadow-glow' : ''}`} onClick={() => setState((current) => ({ ...current, activeModule: item.id }))}><span className="mr-2">{item.icon}</span>{item.label}</button>)}</nav></aside>;
 }
 
 function MobileBottomNav({ state, setState }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void }) {
@@ -575,12 +898,33 @@ function MobileBottomNav({ state, setState }: { state: AppState; setState: (next
 
 function PwaInstallHint({ state, setState }: { state: AppState; setState: (next: AppState | ((current: AppState) => AppState)) => void }) {
   if (state.pwaInstallDismissed) return null;
-  return <div className="mb-4 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-cyan-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><b>PWA-Install-Hinweis</b><p className="text-sm text-cyan-50/70">Installiere AWS Hack über „Zum Home-Bildschirm hinzufügen“ oder das Browser-Installationssymbol.</p></div><button className="cyber-btn" onClick={() => setState((current) => ({ ...current, pwaInstallDismissed: true }))}>Verstanden</button></div></div>;
+  return <div className="mb-4 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-cyan-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><b>PWA-Install-Hinweis</b><p className="text-sm text-cyan-50/70">Installiere AWS KI Manager über „Zum Home-Bildschirm hinzufügen“ oder das Browser-Installationssymbol.</p></div><button className="cyber-btn" onClick={() => setState((current) => ({ ...current, pwaInstallDismissed: true }))}>Verstanden</button></div></div>;
 }
 
 function JarvisOrb({ size = 'normal' }: { size?: 'normal' | 'large' }) {
   const classes = size === 'large' ? 'h-56 w-56 md:h-72 md:w-72' : 'h-28 w-28';
   return <div className={`relative mx-auto grid ${classes} place-items-center`}><div className="jarvis-core absolute inset-0 rounded-full animate-pulseGlow" /><div className="absolute inset-4 rounded-full border-2 border-dashed border-green-200/45 animate-spin [animation-duration:16s]" /><div className="absolute inset-9 rounded-full border border-cyan-200/40 animate-spin [animation-direction:reverse] [animation-duration:8s]" /><div className="relative text-center"><b className={size === 'large' ? 'text-4xl' : 'text-xl'}>AURA</b><p className="tiny mt-1">CORE</p></div></div>;
+}
+
+
+function StatusBadge({ status }: { status: SourceStatus }) {
+  const copy: Record<SourceStatus, string> = {
+    live: 'Live kostenlos',
+    local: 'Lokal',
+    demo: 'Fallback',
+    'api-missing': 'API optional',
+    'permission-missing': 'Freigabe fehlt',
+    offline: 'Offline',
+  };
+  const tone = status === 'live' ? 'border-green-300/40 bg-green-300/15 text-green-50' : status === 'local' ? 'border-white/25 bg-white/10 text-white' : status === 'demo' ? 'border-cyan-300/35 bg-cyan-300/10 text-cyan-50' : status === 'permission-missing' ? 'border-yellow-300/35 bg-yellow-300/10 text-yellow-50' : 'border-zinc-300/25 bg-white/10 text-zinc-100';
+  return <span className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[.16em] ${tone}`}>{copy[status]}</span>;
+}
+
+function detectDateHint(input: string): 'today' | 'yesterday' | 'week' {
+  const text = input.toLowerCase();
+  if (text.includes('gestern')) return 'yesterday';
+  if (text.includes('woche')) return 'week';
+  return 'today';
 }
 
 function Toast({ toast }: { toast: ToastMessage }) {
