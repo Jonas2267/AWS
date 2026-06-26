@@ -15,6 +15,7 @@ export const exampleCommands = [
   'Fasse mir die wichtigsten Technik-News zusammen',
   'Suche Wikipedia nach Künstliche Intelligenz',
   'Öffne Fokusmodus',
+  'Öffne das Terminal',
   'Was muss ich heute noch machen?',
 ];
 

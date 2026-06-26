@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root { color-scheme: dark; }
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -35,7 +36,7 @@ body::after {
   inset: 0;
   pointer-events: none;
   background: linear-gradient(180deg, transparent, rgba(57,255,136,.08), transparent);
-  opacity: .42;
+  opacity: .45;
   mix-blend-mode: screen;
   animation: scan 7s linear infinite;
 }
@@ -64,3 +65,7 @@ body::after {
 
 @keyframes scan { from { transform: translateY(-120%); } to { transform: translateY(120%); } }
 @keyframes aurora { from { filter: hue-rotate(0deg) brightness(1); transform: scale(1); } to { filter: hue-rotate(12deg) brightness(1.14); transform: scale(1.025); } }
+@keyframes scan {
+  from { transform: translateY(-120%); }
+  to { transform: translateY(120%); }
+}

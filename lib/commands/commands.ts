@@ -70,6 +70,7 @@ const moduleAliases: Record<string, ModuleId> = {
   route: 'navigation',
   karten: 'navigation',
   maps: 'navigation',
+  nachrichten: 'news',
   berechtigungen: 'permissions',
   rechte: 'permissions',
   permissions: 'permissions',
@@ -110,6 +111,10 @@ export function detectIntent(input: string): Intent {
 
   if (/(navigiere|route|finde|suche|bring).*(tankstelle|apotheke|supermarkt|parkplatz|werkstatt|mcdonald|kleidung|geldautomat|bankautomat|paketstation|ladestation|krankenhaus|notfall)/.test(text)) {
     return 'find_place';
+  }
+
+  if (/(news|nachrichten|meldungen)/.test(text) && /(fass|zusammen|wichtig|aktuell|briefing|zeige)/.test(text)) {
+    return 'summarize_news';
   }
 
   if (/(welche|fehlende|fehlen|erkläre|erklaere).*(rechte|berechtigungen|permission)/.test(text)) {

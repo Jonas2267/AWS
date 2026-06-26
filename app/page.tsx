@@ -49,6 +49,7 @@ const initialState = (): AppState => ({
   notes: [],
   focus: { minutes: 25, active: false },
   activeModule: 'today',
+  activeModule: 'assistant',
   booted: false,
   setupStep: 0,
   pwaInstallDismissed: false,

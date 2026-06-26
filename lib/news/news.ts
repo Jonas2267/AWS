@@ -39,6 +39,9 @@ export class LiveNewsProvider implements NewsProvider {
     const response = await fetch(`/api/news?${params.toString()}`);
     if (!response.ok) throw new Error('News API Route nicht erreichbar.');
     return response.json() as Promise<NewsResponse>;
+export class NewsApiProvider implements NewsProvider {
+  async list(): Promise<NewsItem[]> {
+    throw new Error('NewsApiProvider ist vorbereitet. Implementiere API-Key-Proxy, Rate-Limits und Quellenfilter serverseitig.');
   }
 
   async summarize(items: NewsItem[]): Promise<string> {
