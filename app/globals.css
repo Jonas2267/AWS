@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg-a: #05060a;
+  --bg-b: #080a10;
+  --surface: #0d1018;
+  --surface-2: #111522;
+  --surface-soft: rgba(255,255,255,.04);
+  --border: rgba(255,255,255,.08);
+  --border-strong: rgba(255,255,255,.14);
+  --text: #f5f7fb;
+  --muted: rgba(245,247,251,.62);
+  --faint: rgba(245,247,251,.38);
+  --cyan: #22d3ee;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --success: #34d399;
+  --warning: #f59e0b;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; overflow-x: hidden; background: var(--bg-a); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-rendering: geometricPrecision; }
+body::before { content: ""; position: fixed; inset: 0; z-index: -3; background: radial-gradient(circle at 14% 82%, rgba(34,211,238,.20), transparent 31%), radial-gradient(circle at 88% 4%, rgba(59,130,246,.25), transparent 34%), radial-gradient(circle at 70% 44%, rgba(139,92,246,.16), transparent 28%), linear-gradient(180deg, var(--bg-b), var(--bg-a) 52%, #03040a); }
+body::after { content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none; opacity: .22; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.34'/%3E%3C/svg%3E"); mix-blend-mode: soft-light; }
+
+@layer components {
+  .app-shell { @apply min-h-screen px-5 pb-16 pt-5 md:px-8; }
+  .premium-nav { @apply sticky top-4 z-40 mx-auto flex max-w-7xl items-center gap-5 rounded-full px-5 py-3; background: rgba(5,6,10,.74); border: 1px solid var(--border); backdrop-filter: blur(18px); box-shadow: 0 24px 80px rgba(0,0,0,.22); }
+  .premium-link { @apply relative px-1 py-2 text-sm font-medium transition duration-200; color: var(--muted); }
+  .premium-link::after { content: ""; position: absolute; left: 0; right: 0; bottom: 2px; height: 1px; transform: scaleX(0); transform-origin: center; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: transform .22s ease; }
+  .premium-link:hover, .premium-link-active { color: var(--text); }
+  .premium-link-active::after { transform: scaleX(1); }
+  .premium-action { @apply rounded-full px-3 py-2 text-sm font-medium transition duration-200; color: rgba(245,247,251,.72); border: 1px solid transparent; }
+  .premium-action:hover { color: white; border-color: var(--border); background: rgba(255,255,255,.04); }
+  .hero { @apply relative overflow-hidden rounded-[2.4rem] p-8 md:p-12; background: linear-gradient(135deg, rgba(17,21,34,.88), rgba(13,16,24,.70)); border: 1px solid var(--border); box-shadow: 0 32px 120px rgba(0,0,0,.35); }
+  .hero::before { content: ""; position: absolute; inset: -35%; background: radial-gradient(circle at 20% 65%, rgba(34,211,238,.18), transparent 25%), radial-gradient(circle at 88% 18%, rgba(139,92,246,.16), transparent 25%); pointer-events: none; }
+  .soft-panel, .premium-card, .window, .card { @apply relative rounded-[1.7rem] border p-5 md:p-6 transition duration-300; background: rgba(13,16,24,.72); border-color: var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 20px 70px rgba(0,0,0,.22); }
+  .premium-card:hover, .card:hover { transform: translateY(-2px); border-color: rgba(34,211,238,.20); background: rgba(17,21,34,.82); }
+  .feature-panel { @apply rounded-[2rem] border p-6 md:p-8; background: linear-gradient(145deg, rgba(17,21,34,.9), rgba(13,16,24,.72)); border-color: var(--border); }
+  .command-bar, .field { @apply w-full rounded-2xl border px-4 py-3.5 outline-none transition duration-200; background: rgba(255,255,255,.04); border-color: var(--border); color: var(--text); }
+  .command-bar:focus, .field:focus { border-color: rgba(34,211,238,.42); box-shadow: 0 0 0 4px rgba(34,211,238,.07); }
+  .primary-btn { @apply min-h-11 rounded-full px-5 py-3 text-sm font-semibold transition duration-200 active:scale-[.99]; color: #031018; background: linear-gradient(135deg, var(--cyan), #94a3ff 52%, var(--purple)); box-shadow: 0 18px 50px rgba(59,130,246,.18); }
+  .primary-btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+  .secondary-btn { @apply min-h-10 rounded-full border px-4 py-2.5 text-sm font-medium transition duration-200; background: rgba(255,255,255,.035); border-color: var(--border); color: rgba(245,247,251,.78); }
+  .secondary-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.06); color: white; border-color: rgba(34,211,238,.22); }
+  .answer-card { @apply rounded-[1.6rem] border p-5; background: linear-gradient(145deg, rgba(17,21,34,.88), rgba(13,16,24,.76)); border-color: var(--border); }
+  .user-question { @apply ml-auto max-w-[84%] rounded-2xl border px-4 py-3 text-sm; background: rgba(255,255,255,.045); border-color: var(--border); color: rgba(245,247,251,.78); }
+  .tiny { @apply text-xs uppercase tracking-[.22em]; color: var(--faint); }
+  .status-dot { @apply inline-block h-2 w-2 rounded-full; background: var(--success); box-shadow: 0 0 18px rgba(52,211,153,.38); }
+  .settings-drawer { background: rgba(5,6,10,.96); border-left: 1px solid var(--border); backdrop-filter: blur(18px); animation: drawer .24s ease-out both; }
+}
+
+.gradient-orb, .aura-core { background: radial-gradient(circle at 50% 44%, rgba(245,247,251,.36), rgba(34,211,238,.18) 32%, rgba(139,92,246,.12) 55%, transparent 74%); box-shadow: 0 0 90px rgba(34,211,238,.16), inset 0 0 42px rgba(255,255,255,.08); }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+@keyframes drawer { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes boot { from { opacity: 0; filter: blur(10px); transform: translateY(10px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
