@@ -1,7 +1,7 @@
 export type PermissionStatus = 'demo' | 'requested' | 'granted' | 'denied' | 'disconnected';
 export type DataMode = 'demo' | 'live' | 'mixed';
 export type SourceStatus = 'live' | 'local' | 'demo' | 'api-missing' | 'permission-missing' | 'offline';
-export type ProviderStatus = 'connected' | 'available' | 'permission-needed' | 'optional-key-needed' | 'blocked' | 'unavailable' | 'fallback';
+export type ProviderStatus = 'live' | 'local' | 'unavailable' | 'limit-reached' | 'permission-needed' | 'optional-key-needed' | 'blocked' | 'offline';
 export type ModuleId = 'assistant' | 'weather' | 'dashboard' | 'calendar' | 'tasks' | 'news' | 'wiki' | 'today' | 'notes' | 'focus' | 'navigation' | 'permissions' | 'terminal' | 'files' | 'system' | 'setup';
 export type TaskPriority = 'niedrig' | 'mittel' | 'hoch';
 export type TaskStatus = 'offen' | 'läuft' | 'erledigt';
@@ -150,7 +150,20 @@ export type ProviderConnection = {
   status: ProviderStatus;
   source: string;
   detail: string;
+  lastChecked?: string;
+  limit?: number;
+  usedToday?: number;
+  resetAt?: string;
+  error?: string;
+  attribution?: string;
+  freeTier?: string;
   updatedAt?: string;
+};
+
+export type ProviderUsage = {
+  id: string;
+  usedToday: number;
+  resetAt: string;
 };
 
 export type AppState = {
@@ -158,6 +171,7 @@ export type AppState = {
   runtime?: {
     location?: BrowserLocation;
     microphoneActive?: boolean;
+    speechListening?: boolean;
     speechSupported?: boolean;
     weather?: WeatherSnapshot;
     wiki?: WikiSummary;
@@ -170,6 +184,7 @@ export type AppState = {
   messages: ChatMessage[];
   reminders: Reminder[];
   providerStatus?: Record<string, ProviderConnection>;
+  providerUsage?: Record<string, ProviderUsage>;
   notes?: NoteItem[];
   focus?: FocusSession;
   activeModule: ModuleId;
@@ -184,6 +199,9 @@ export type AppState = {
     auraStyle: 'kurz' | 'normal' | 'detailliert';
     preferLiveSources: boolean;
     forceFreeMode: boolean;
+    voiceEnabled: boolean;
+    readAnswers: boolean;
+    wakeWord: 'AURA' | 'Jarvis';
     defaultCity: string;
     defaultMaps: 'google' | 'apple' | 'osm';
     quickDock: boolean;

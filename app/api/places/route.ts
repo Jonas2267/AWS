@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     });
     return NextResponse.json({ source: 'live', attribution: '© OpenStreetMap-Mitwirkende / Nominatim', items });
   } catch (error) {
-    return NextResponse.json({ source: 'offline', attribution: 'Lokaler Fallback', message: error instanceof Error ? error.message : 'Places-Fallback aktiv.', items: demoPlaces.filter((place) => place.category === category) });
+    return NextResponse.json({ source: 'offline', attribution: 'Lokale Ersatzliste', message: error instanceof Error ? error.message : 'OpenStreetMap aktuell nicht erreichbar.', items: demoPlaces.filter((place) => place.category === category) });
   }
 }
 
