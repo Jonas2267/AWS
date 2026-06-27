@@ -681,6 +681,7 @@ function SetupWizard({ state, setState, requestNotifications, notify, openModule
   );
 }
 
+
 function TodayModule({ state, openModule, requestNotifications }: ModuleProps) {
   const nextEvent = upcomingEvents(state.events)[0];
   const openTasks = state.tasks.filter((task) => task.status !== 'erledigt');
@@ -1265,6 +1266,12 @@ function PwaInstallHint({ state, setState }: { state: AppState; setState: (next:
 function AuraOrb({ size = 'normal' }: { size?: 'normal' | 'large' }) {
   const classes = size === 'large' ? 'h-56 w-56 md:h-72 md:w-72' : 'h-28 w-28';
   return <div className={`relative mx-auto grid ${classes} place-items-center`}><div className="aura-core absolute inset-0 rounded-full animate-pulseGlow" /><div className="absolute inset-4 rounded-full border-2 border-dashed border-blue-100/45 animate-spin [animation-duration:16s]" /><div className="absolute inset-9 rounded-full border border-blue-100/40 animate-spin [animation-direction:reverse] [animation-duration:8s]" /><div className="relative text-center"><b className={size === 'large' ? 'text-4xl' : 'text-xl'}>AURA</b><p className="tiny mt-1">CORE</p></div></div>;
+  return <div className="mb-4 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-cyan-50"><div className="flex flex-wrap items-center justify-between gap-3"><div><b>PWA-Install-Hinweis</b><p className="text-sm text-cyan-50/70">Installiere AWS KI Manager über „Zum Home-Bildschirm hinzufügen“ oder das Browser-Installationssymbol.</p></div><button className="cyber-btn" onClick={() => setState((current) => ({ ...current, pwaInstallDismissed: true }))}>Verstanden</button></div></div>;
+}
+
+function JarvisOrb({ size = 'normal' }: { size?: 'normal' | 'large' }) {
+  const classes = size === 'large' ? 'h-56 w-56 md:h-72 md:w-72' : 'h-28 w-28';
+  return <div className={`relative mx-auto grid ${classes} place-items-center`}><div className="jarvis-core absolute inset-0 rounded-full animate-pulseGlow" /><div className="absolute inset-4 rounded-full border-2 border-dashed border-green-200/45 animate-spin [animation-duration:16s]" /><div className="absolute inset-9 rounded-full border border-cyan-200/40 animate-spin [animation-direction:reverse] [animation-duration:8s]" /><div className="relative text-center"><b className={size === 'large' ? 'text-4xl' : 'text-xl'}>AURA</b><p className="tiny mt-1">CORE</p></div></div>;
 }
 
 

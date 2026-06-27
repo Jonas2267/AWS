@@ -107,6 +107,10 @@ public struct PersonalDataHub: Sendable {
         await navigation.openNavigation(destination: destination, mode: mode, preference: preference)
     }
 
+            headlines: newsResult ?? []
+        )
+    }
+
     public func dailyBriefing(for username: String) async -> DailyBriefing {
         let data = await snapshot()
         let formatter = DateFormatter()

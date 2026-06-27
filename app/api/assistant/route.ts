@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { demoWeather } from '@/lib/weather/weather';
+import { demoNews, summarizeNews } from '@/lib/news/news';
 import { bestFuelRecommendation, demoPlaces, detectPlaceCategory } from '@/lib/navigation/navigation';
 
 export async function POST(request: Request) {
