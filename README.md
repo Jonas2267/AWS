@@ -240,6 +240,7 @@ Danach `http://localhost:3000` öffnen. Beim ersten Start wird ein lokaler Demo-
 
 ## Apple-first iPhone App
 
+Zusätzlich zur Web/PWA-Demo gibt es jetzt unter `ios/AWSHackApple` eine Swift/SwiftUI/MVVM-Version für iPhone mit Core-Provider-Schicht, Daily Briefing, AURA Command-System, Permission Center, Alltags-Navigation/Places-Suche, Keychain/SwiftData-Vorbereitung, Document-Picker-Zusammenfassung, EventKit/UserNotifications-Vorbereitung, App Intents und sicherem Demo-Fallback. Details stehen in `ios/AWSHackApple/README.md`.
 Zusätzlich zur Web/PWA-Demo gibt es jetzt unter `ios/AWSHackApple` eine Swift/SwiftUI/MVVM-Version für iPhone mit Core-Provider-Schicht, Daily Briefing, AURA Command-System, Permission Center, EventKit/UserNotifications-Vorbereitung, App Intents und sicherem Demo-Fallback. Details stehen in `ios/AWSHackApple/README.md`.
 
 ## Was jetzt funktioniert
